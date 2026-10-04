@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+.deps/
+artifacts/
+OPERATIONS.md
+AGENT_CHANGELOG.md
+CODEMAP.md
+.hermes/
+Environment.props
