@@ -35,13 +35,8 @@ internal sealed class Exhaustion
             ?? throw new InvalidOperationException("Missing embedded exhaustion icon.");
         using var bytes = new MemoryStream(); stream.CopyTo(bytes);
         var texture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-        // The current Unity module references netstandard 2.1 while BepInEx 5 plugins
-        // target net48. Reflect this one static entrypoint instead of mixing framework facades.
-        var conversion = Type.GetType("UnityEngine.ImageConversion, UnityEngine.ImageConversionModule", true)!;
-        var load = conversion.GetMethod("LoadImage", BindingFlags.Public | BindingFlags.Static, null,
-            new[] { typeof(Texture2D), typeof(byte[]), typeof(bool) }, null)
-            ?? throw new MissingMethodException("Unity ImageConversion.LoadImage(Texture2D, byte[], bool)");
-        if (!(bool)load.Invoke(null, new object[] { texture, bytes.ToArray(), false }))
+        // Jotunn's established bridge handles Unity's netstandard 2.1 decoder from net48.
+        if (!Jotunn.Utils.AssetUtils.LoadImage(texture, bytes.ToArray()))
         { UnityEngine.Object.Destroy(texture); throw new InvalidOperationException("Invalid exhaustion icon."); }
         return Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
     }

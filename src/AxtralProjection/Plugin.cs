@@ -21,7 +21,7 @@ public sealed class Plugin : BaseUnityPlugin
     public const string Guid = "haragon.AxtralProjectionValheim";
     private static Plugin? instance;
     private Harmony harmony = null!;
-    private const string CastButton = "AxtralProjectionCast";
+    private string castButton = "", gamepadButton = "";
     private ConfigEntry<KeyboardShortcut> castKey = null!;
     private ConfigEntry<InputManager.GamepadButton> gamepad = null!;
     private ConfigEntry<float> range = null!, angle = null!, cooldown = null!, skill = null!, speed = null!, startWidth = null!, durability = null!, xp = null!;
@@ -36,6 +36,7 @@ public sealed class Plugin : BaseUnityPlugin
     private readonly PreviewEffects effects = new PreviewEffects();
     private float nextPreview;
     private Coroutine? flight;
+    private bool casting;
     private GameObject? axeVisual;
     private Exhaustion exhaustion = null!;
     private Transform? posedArm, posedForearm;
@@ -48,7 +49,13 @@ public sealed class Plugin : BaseUnityPlugin
         GameCompat.Log = Logger;
         castKey = Config.Bind("Controls", "CastKey", new KeyboardShortcut(KeyCode.G, KeyCode.LeftShift), "Hold to aim; release to cast. Right mouse or Escape cancels.");
         gamepad = Config.Bind("Controls", "GamepadButton", InputManager.GamepadButton.None, "Optional gamepad cast binding; None disables it to avoid vanilla conflicts.");
-        InputManager.Instance.AddButton(Guid, new ButtonConfig { Name = CastButton, ShortcutConfig = castKey, GamepadConfig = gamepad, ActiveInGUI = false, ActiveInCustomGUI = false });
+        // Jotunn appends !GUID to Name. Use the registered names, not the bare labels.
+        // Separate gamepad input so Jotunn does not require keyboard modifiers for it.
+        var keyboardButton = new ButtonConfig { Name = "AxtralProjectionCast", ShortcutConfig = castKey, ActiveInGUI = false, ActiveInCustomGUI = false };
+        var controllerButton = new ButtonConfig { Name = "AxtralProjectionGamepad", GamepadConfig = gamepad, ActiveInGUI = false, ActiveInCustomGUI = false };
+        InputManager.Instance.AddButton(Guid, keyboardButton);
+        InputManager.Instance.AddButton(Guid, controllerButton);
+        castButton = keyboardButton.Name; gamepadButton = controllerButton.Name;
         castKey.SettingChanged += ControlsChanged;
         gamepad.SettingChanged += ControlsChanged;
         range = Synced("Range", 20f, 10f, 50f, "Maximum range in meters.");
@@ -67,6 +74,7 @@ public sealed class Plugin : BaseUnityPlugin
         exhaustion = new Exhaustion();
         harmony = new Harmony(Guid);
         harmony.PatchAll(typeof(Plugin).Assembly);
+        UnityEngine.SceneManagement.SceneManager.sceneUnloaded += SceneUnloaded;
         Logger.LogInfo("Axtral Projection 0.1.0 loaded. Hold the configured shortcut to aim; release to cast.");
     }
     private ConfigEntry<float> Synced(string name, float value, float min, float max, string description) => Config.Bind("Spell", name, value, new ConfigDescription(description, new AcceptableValueRange<float>(min, max), new ConfigurationManagerAttributes { IsAdminOnly = true }));
@@ -90,7 +98,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void Update()
     {
         try { RestorePose(); Tick(); }
-        catch (Exception e) { Cancel(); Logger.LogError(e); Show("Axtral Projection failed; see BepInEx log."); }
+        catch (Exception e) { Cancel(); StopFlight(); Logger.LogError(e); Show("Axtral Projection failed; see BepInEx log."); }
     }
     private void Tick()
     {
@@ -107,7 +115,7 @@ public sealed class Plugin : BaseUnityPlugin
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)) { Cancel(); return; }
             if (player.GetCurrentWeapon() != aimAxe || BestAxe(player) != aimAxe) { Cancel(); Show("Axe changed: spell cancelled."); return; }
             // GetKey rather than GetKeyUp also handles a remapped key or a lost release event.
-            if (!ZInput.GetButton(CastButton)) { Release(); return; }
+            if (!(ZInput.GetButton(castButton) || ZInput.GetButton(gamepadButton))) { Release(); return; }
             if (Time.unscaledTime >= nextPreview)
             {
                 preview = Targets.Find(player.transform.position, Direction(player), Range, Angle, aimAxe!.m_shared.m_toolTier, stumps.Value, additional.Value, excluded.Value, StartWidth, MaxTrees);
@@ -115,7 +123,7 @@ public sealed class Plugin : BaseUnityPlugin
                 nextPreview = Time.unscaledTime + 0.1f;
             }
         }
-        else if (ZInput.GetButtonDown(CastButton) && flight == null)
+        else if ((ZInput.GetButtonDown(castButton) || ZInput.GetButtonDown(gamepadButton)) && !casting)
         {
             var axe = BestAxe(player);
             var failure = gate.Begin(player.GetSkillLevel(Skills.SkillType.WoodCutting), axe != null, RequiredSkill, IsExhausted(player));
@@ -139,6 +147,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (failure != CastFailure.None) { ShowFailure(failure); return; }
         if (!exhaustion.Apply(p, Cooldown)) { Show("Unable to apply Axtral Exhaustion; spell cancelled."); return; }
         // Set cooldown before any effect or world operation. A thrown visual error cannot permit a free repeat.
+        casting = true;
         flight = StartCoroutine(Launch(p, origin, dir, axe!, targets, castRange, castAngle, castSpeed, castWidth, DurabilityPercent, SkillXp));
         Show("Axtral Projection cast!");
     }
@@ -173,10 +182,10 @@ public sealed class Plugin : BaseUnityPlugin
                 traveled = Mathf.Min(castRange, traveled + Time.deltaTime * castSpeed);
             }
         }
-        finally { if (axeVisual) Destroy(axeVisual); axeVisual = null; flight = null; }
+        finally { if (axeVisual) Destroy(axeVisual); axeVisual = null; flight = null; casting = false; }
     }
     private void Cancel() { RestorePose(); gate.Cancel(); effects.Clear(); preview.Clear(); aimAxe = null; }
-    private void StopFlight() { if (flight != null) StopCoroutine(flight); flight = null; if (axeVisual) Destroy(axeVisual); axeVisual = null; }
+    private void StopFlight() { if (flight != null) StopCoroutine(flight); flight = null; casting = false; if (axeVisual) Destroy(axeVisual); axeVisual = null; }
     private void LateUpdate()
     {
         if (!gate.Aiming || !player) return;
@@ -213,8 +222,9 @@ public sealed class Plugin : BaseUnityPlugin
         GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height * 0.72f, 440, 55), $"Axtral Projection — {preview.Count} targets\nRelease {castKey.Value} to cast · Right mouse to cancel");
     }
     private void ControlsChanged(object sender, EventArgs e) { Cancel(); }
+    private void SceneUnloaded(UnityEngine.SceneManagement.Scene scene) { Cancel(); StopFlight(); }
     private void OnDisable() { Cancel(); StopFlight(); }
-    private void OnDestroy() { castKey.SettingChanged -= ControlsChanged; gamepad.SettingChanged -= ControlsChanged; Cancel(); StopFlight(); effects.Dispose(); harmony?.UnpatchSelf(); instance = null; }
+    private void OnDestroy() { UnityEngine.SceneManagement.SceneManager.sceneUnloaded -= SceneUnloaded; castKey.SettingChanged -= ControlsChanged; gamepad.SettingChanged -= ControlsChanged; Cancel(); StopFlight(); effects.Dispose(); harmony?.UnpatchSelf(); instance = null; }
     [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.StartAttack))]
     private static class PreventAttackWhileAiming
     {
