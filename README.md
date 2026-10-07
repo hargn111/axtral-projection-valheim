@@ -1,55 +1,65 @@
 # Axtral Projection for Valheim
 
-A BepInEx mod inspired by RuneScape: Dragonwilds' **Axtral Projection** spell.
+**v0.2.0 gameplay candidate — statically verified, not yet playtested.** A focused BepInEx mod inspired by RuneScape: Dragonwilds. No RuneScape assets are included.
 
-**Status: v0.1.0 compiled gameplay candidate. Automated spell-logic tests pass; in-game validation is still required.** No RuneScape assets are included.
+Hold **LeftShift + G** to aim and release to cast; right mouse/Escape cancels. The highest-tier unbroken inventory axe is automatically equipped and must remain equipped at release. Defaults require **wood cutting level 15** and **the Elder's power selected as your Forsaken Power** (`Slotted`, not necessarily active).
 
-## Play
+Targeting uses a radius-aware horizontal trapezoid, not a pointed cone. A 3-meter starting width catches trees directly ahead; the volume widens at 30 degrees over 20 meters and tolerates base elevations within ±10 meters. Up to 15 targets are selected nearest-forward first. Native chop damage preserves drops, falling logs, wards and tool-tier restrictions.
 
-- Hold **G** to raise your axe and aim a green target preview; release to cast.
-- Right mouse or Escape cancels without spending resources.
-- Defaults: **30 m range**, **30° full-width cone**, **45 s cooldown**, **Woodcutting level 11**, **10 Axtral Runes**.
-- Your highest-tier unbroken woodcutting axe in inventory controls what trees can be felled; it is automatically equipped.
-- Craft **10 Axtral Runes** at a workbench using **2 Resin + 1 Greydwarf Eye**. The first version reuses Amber's model/icon.
-- The astral axe and wave move outward and deliver native chop damage to eligible standing trees and existing stumps. Logs and new stumps are left for later.
+Charges are progressive: 1% max axe durability per non-stump hit; the breaking hit lands and stops the remaining flight. Skill XP defaults to zero. Successful nonempty casts apply **Axtral Exhaustion** for 180 seconds in the normal status-effect area. No custom cooldown UI or relog persistence layer remains; Exhaustion follows normal Valheim status-effect lifecycle.
 
-## Install the candidate
+## Install and configure
 
-1. Install the Valheim-specific **BepInExPack_Valheim** (not an arbitrary BepInEx 6 build).
-2. Install **Jotunn 2.30.2**.
-3. Extract the candidate ZIP into the game/mod-profile directory, preserving `BepInEx/plugins/AxtralProjection/`.
-4. Confirm BOTH `AxtralProjection.dll` and `AxtralProjection.Core.dll` are installed.
-5. Launch once to generate `BepInEx/config/haragon.AxtralProjectionValheim.cfg`.
+See the [player guide](package/README.md). Install BepInExPack_Valheim and Jotunn 2.30.2 separately, then extract the ZIP preserving both project DLLs. Config: `BepInEx/config/haragon.AxtralProjectionValheim.cfg`; no migration from the previous GUID.
 
-For multiplayer, all clients **and the server** need the same mod and Jotunn. Spell settings sync from the server; casting is trusted-client rather than server-authoritative. The flying axe, hold pose and targeting preview are local visuals. Native tree destruction replicates.
+`Controls.CastKey` is a rebindable shortcut. `Controls.GamepadButton` is an independent optional controller binding, default None. Gameplay options remain in `Spell`:
 
-Use a disposable world for the first test: falling trees retain native physics. Read [the acceptance checklist](docs/TESTING.md) before testing against a world you care about.
+| Spell setting | Default | Bounds / meaning |
+|---|---|---|
+| Range | 20 | 10–50 meters |
+| ConeAngle | 30 | 20–45 degrees, full widening angle |
+| StartWidth | 3 | 0–10 meters, full width at origin |
+| MaxTrees | 15 | 2–50 targets, nearest forward first |
+| Cooldown | 180 | 0–600 seconds; 0 disables Exhaustion |
+| WoodCuttingLevel | 15 | 0–100, required wood cutting skill level |
+| TravelSpeed | 10 | 1–50 meters/second |
+| DurabilityCostPercent | 1 | 0–25% max axe durability per non-stump hit; 0 disables |
+| SkillXpPerTree | 0 | 0–1 skill gain per non-stump hit; 0 disables |
+| ElderRequirement | Slotted | None / Slotted / Active |
+| ClearStumps | false | Include existing stumps; not newly created ones |
+| AdditionalPrefabs | empty | Comma-separated exact Destructible prefab names from other mods |
+| ExcludedPrefabs | empty | Exact prefab names to never fell; overrides inclusion |
 
-## Configuration
+Changes via a configuration manager apply to the next cast. In-flight values are snapshotted; cached input changes cancel aim safely. Manual file edits require the config tool's reload or a game restart. Names are trimmed, exact/case-sensitive, and `(Clone)` is stripped. Exclusion wins; disabled stumps cannot be force-included.
 
-`Controls.CastKey` defaults to G. `Spell` contains Range, ConeAngle (full width), Cooldown, WoodcuttingLevel, RuneCost, TravelSpeed, ClearStumps and VinePrefabs. Gameplay settings are admin-only and synchronized through Jotunn. Edit the config while the game is stopped, or use a compatible configuration-manager UI.
+Rune item/recipe, resource config and payment are deprecated to avoid multiplayer custom-item conflicts. Dormant source remains under `Deprecated/Runes`, inactive unless explicitly reintegrated with `ENABLE_RUNES`.
 
-`VinePrefabs` is empty by default: no vanilla cave-vine mapping has been verified. Supply exact modded destructible prefab names if needed. The mod never broadly destroys arbitrary objects.
+Clients can use the mod on vanilla servers. Settings sync when the server also has the mod and Jotunn. Version checks are not enforced (`VersionCheckOnly`, `None`); this is trusted-client co-op, not server-authoritative anti-cheat. Custom VFX stay local; native destruction replicates.
 
 ## Build and test
 
-Requirements: **.NET 8 SDK**, **Python 3**, network access for pinned compile dependencies. A Unity editor or installed game is not required for this reference build.
+Requires .NET 8 SDK and Python 3. Reuse the existing compile-reference preparation:
 
 ```sh
 python3 scripts/prepare-references.py
+# Copy DLLs from the Valheim 1.0.2 valheim_Data/Managed folder to ignored references/.
 dotnet build AxtralProjection.sln -c Release
 dotnet test tests/AxtralProjection.Tests -c Release
+python3 scripts/audit-imports
+python3 scripts/check-version.py
+python3 -m unittest discover -s tests/scripts -v
 python3 scripts/package.py
 ```
 
-Artifact: `artifacts/AxtralProjection-0.1.0.zip`. Only this project's two DLLs and instructions are packaged. Never copy game/reference DLLs, Jotunn, BepInEx or Harmony from build output into a game installation.
+Baseline: supplied Valheim **1.0.2** game and Unity DLLs, Jotunn **2.30.2**, BepInEx **5.4.21** compile API. Required DLLs include assembly_valheim, assembly_utils, Assembly-CSharp and UnityEngine/CoreModule/AnimationModule/PhysicsModule/InputLegacyModule/IMGUIModule/ImageConversionModule. Supplying the complete matching Managed set avoids transitive-reference gaps. Override `GameReferences` for builds if necessary; packaging and audit use `references/`.
 
-Pinned compile baseline: ValheimGameLibs 0.221.4, UnityEngine.Modules 2021.3.33, Jotunn 2.30.2, BepInEx 5.4.21 API. Later game builds are not verified by this compile. The BepInEx download script pins the archive checksum. No CI workflow is configured in this repository; local verification is the current build gate.
+The import audit resolves game/Unity method and field references and fails on unresolved imports. HUD messages use a reflected signature-compatible wrapper. Icon decoding uses Jotunn's net48-compatible `AssetUtils.LoadImage` bridge; reflection-based runtime behavior still needs playtesting.
+
+Packaging always rebuilds from source and runs validations. Output: `artifacts/AxtralProjection-0.2.0.zip`. Only the two project DLLs and player-facing files ship; never game/reference or third-party binaries. No CI workflow is added because current game references are local-only.
 
 ## Documentation
 
-- [Spell semantics, safeguards and limitations](docs/DESIGN.md)
-- [In-game testing checklist](docs/TESTING.md)
-- [Documentation sources used](docs/SOURCES.md)
-
-No Unity/MCP setup is currently required to build. The next required input is a **Valheim test client** and its game/BepInEx/Jotunn versions, for gameplay, shader and pose verification. Unity authoring can follow later if bespoke animation or art is desired.
+- [Design and safeguards](docs/DESIGN.md)
+- [Testing and pending playtests](docs/TESTING.md)
+- [Local-first release instructions](docs/RELEASING.md)
+- [Sources](docs/SOURCES.md)

@@ -1,6 +1,6 @@
 # Documentation sources
 
-The user's detailed Dragonwilds spell description is the authoritative feature specification for this adaptation. Numerical defaults are taken from that description; the rune recipe and controls are Valheim-specific choices.
+The implementation brief defines current spell behavior; README and DESIGN record its accepted adjustments. Historical rune design remains isolated and inactive.
 
 ## BepInEx 5.4.21
 
@@ -24,8 +24,8 @@ Applied: BaseUnityPlugin/Awake lifecycle, BepInPlugin/BepInDependency metadata, 
 - https://github.com/Valheim-Modding/Jotunn
 - https://www.nuget.org/packages/ValheimGameLibs/0.221.4
 
-Applied: Valheim-specific BepInEx runtime pack, net48 plugin, vanilla-prefab-available event, cloned CustomItem/ItemConfig/recipe, Jotunn admin-only synchronized configuration, network compatibility enforcement.
+Applied now: net48 plugin, Jotunn admin-only synchronized configuration, CustomStatusEffect, config-backed ButtonConfig, VersionCheckOnly and AssetUtils.LoadImage. Inspected version-tagged v2.30.2 InputManager/ItemManager/AssetUtils sources alongside the local Jotunn assembly; initial CustomItem/recipe code is deprecated.
 
-The Valtools pages are mirrors of the community wiki. Their first-mod tutorial explicitly targets game 0.219.16; it is used for architecture, not claimed as proof of current gameplay compatibility. The project instead compiles against pinned 0.221.4 reference signatures. These stripped/publicized references expose signatures but have no executable game method bodies and cannot replace runtime testing.
+The Valtools pages are mirrors of the community wiki. Their first-mod tutorial explicitly targets game 0.219.16; it is used for architecture, not claimed as proof of current gameplay compatibility. The initial candidate used 0.221.4 stripped references. Current builds use supplied Valheim 1.0.2 DLLs; signature inspection and import resolution still cannot replace runtime testing.
 
 Inspected reference signatures for TreeBase/Destructible/HitData, Player/Character/Humanoid, Inventory/ItemDrop, ZNetView, PrivateArea and input UI classes. No game binaries are committed or packaged.

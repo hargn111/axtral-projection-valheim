@@ -13,11 +13,12 @@ using Jotunn.Utils;
 using UnityEngine;
 
 namespace AxtralProjection;
-[BepInPlugin(Guid, "Axtral Projection", "0.1.0")]
+[BepInPlugin(Guid, "Axtral Projection", Version)]
 [BepInDependency(Jotunn.Main.ModGuid)]
 [NetworkCompatibility(CompatibilityLevel.VersionCheckOnly, VersionStrictness.None)]
 public sealed class Plugin : BaseUnityPlugin
 {
+    public const string Version = "0.2.0";
     public const string Guid = "haragon.AxtralProjectionValheim";
     private static Plugin? instance;
     private Harmony harmony = null!;
@@ -75,7 +76,7 @@ public sealed class Plugin : BaseUnityPlugin
         harmony = new Harmony(Guid);
         harmony.PatchAll(typeof(Plugin).Assembly);
         UnityEngine.SceneManagement.SceneManager.sceneUnloaded += SceneUnloaded;
-        Logger.LogInfo("Axtral Projection 0.1.0 loaded. Hold the configured shortcut to aim; release to cast.");
+        Logger.LogInfo($"Axtral Projection {Version} loaded. Hold the configured shortcut to aim; release to cast.");
     }
     private ConfigEntry<float> Synced(string name, float value, float min, float max, string description) => Config.Bind("Spell", name, value, new ConfigDescription(description, new AcceptableValueRange<float>(min, max), new ConfigurationManagerAttributes { IsAdminOnly = true }));
     private float Range => ConfigBounds.Clamp(range.Value, 10, 50, 20);
