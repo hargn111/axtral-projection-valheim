@@ -16,18 +16,15 @@ using UnityEngine;
 namespace AxtralProjection;
 [BepInPlugin(Guid, "Axtral Projection", "0.1.0")]
 [BepInDependency(Jotunn.Main.ModGuid)]
-[NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Patch)]
+[NetworkCompatibility(CompatibilityLevel.VersionCheckOnly, VersionStrictness.None)]
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "haragon.AxtralProjectionValheim";
-    public const string RunePrefab = "AxtralRune";
-    private const string RuneName = "$item_axtral_rune";
     private const string CooldownKey = Guid + ".readyAt";
     private static Plugin? instance;
     private Harmony harmony = null!;
     private ConfigEntry<KeyCode> castKey = null!;
     private ConfigEntry<float> range = null!, angle = null!, cooldown = null!, skill = null!, speed = null!;
-    private ConfigEntry<int> runeCost = null!;
     private ConfigEntry<bool> stumps = null!;
     private ConfigEntry<string> vines = null!;
     private Player? player;
@@ -54,26 +51,13 @@ public sealed class Plugin : BaseUnityPlugin
         cooldown = Synced("Cooldown", 45f, 0f, 600f, "Cooldown in seconds after a successful cast.");
         skill = Synced("WoodcuttingLevel", 11f, 0f, 100f, "Required Woodcutting skill.");
         speed = Synced("TravelSpeed", 30f, 1f, 100f, "Astral wave travel speed in meters per second.");
-        runeCost = Config.Bind("Spell", "RuneCost", 10, new ConfigDescription("Axtral Runes spent per successful cast.", new AcceptableValueRange<int>(0, 100), new ConfigurationManagerAttributes { IsAdminOnly = true }));
         stumps = Config.Bind("Spell", "ClearStumps", true, new ConfigDescription("Include existing tree stumps. Newly spawned stumps are left for a later cast.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         vines = Config.Bind("Spell", "VinePrefabs", "", new ConfigDescription("Comma-separated exact Destructible prefab names from other mods. Empty by default: no verified vanilla cave-vine equivalent.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
-        PrefabManager.OnVanillaPrefabsAvailable += RegisterRune;
         harmony = new Harmony(Guid);
         harmony.PatchAll(typeof(Plugin).Assembly);
         Logger.LogInfo("Axtral Projection 0.1.0 loaded. Hold G to aim, release to cast.");
     }
     private ConfigEntry<float> Synced(string name, float value, float min, float max, string description) => Config.Bind("Spell", name, value, new ConfigDescription(description, new AcceptableValueRange<float>(min, max), new ConfigurationManagerAttributes { IsAdminOnly = true }));
-    private void RegisterRune()
-    {
-        var config = new ItemConfig { Name = RuneName, Description = "$item_axtral_rune_desc", Amount = 10, CraftingStation = "piece_workbench" };
-        config.AddRequirement("Resin", 2); config.AddRequirement("GreydwarfEye", 1);
-        var item = new CustomItem(RunePrefab, "Amber", config);
-        item.ItemDrop.m_itemData.m_shared.m_maxStackSize = 100;
-        item.ItemDrop.m_itemData.m_shared.m_weight = 0.1f;
-        if (!ItemManager.Instance.AddItem(item)) throw new InvalidOperationException("AxtralRune registration failed.");
-        LocalizationManager.Instance.GetLocalization().AddTranslation("English", new Dictionary<string, string> { { "item_axtral_rune", "Axtral Rune" }, { "item_axtral_rune_desc", "A rune charged with forest magic. Ten fuel one Axtral Projection." } });
-        PrefabManager.OnVanillaPrefabsAvailable -= RegisterRune;
-    }
     private static bool InputBlocked() => UnityEngine.Application.isFocused == false || Time.timeScale == 0 || global::Console.IsVisible() || InventoryGui.IsVisible() || Menu.IsVisible() || TextInput.IsVisible() || (Chat.instance && Chat.instance.HasFocus());
     private static bool Unsafe(Player p) => p.IsDead() || p.IsTeleporting() || p.InCutscene() || p.InPlaceMode() || p.InDodge() || p.IsSwimming() || p.IsAttached() || p.InAttack();
     private static ItemDrop.ItemData? BestAxe(Player p) => p.GetInventory().GetAllItems().Where(i => i.m_shared.m_skillType == Skills.SkillType.Axes && i.GetDamage().m_chop > 0 && (!i.m_shared.m_useDurability || i.m_durability > 0)).OrderByDescending(i => i.m_shared.m_toolTier).ThenByDescending(i => i.GetDamage().m_chop).FirstOrDefault();
@@ -115,7 +99,7 @@ public sealed class Plugin : BaseUnityPlugin
         else if (Input.GetKeyDown(castKey.Value) && flight == null)
         {
             var axe = BestAxe(player);
-            var failure = gate.Begin(Now, player.GetSkillLevel(Skills.SkillType.WoodCutting), player.GetInventory().CountItems(RuneName), axe?.m_shared.m_toolTier, skill.Value, runeCost.Value);
+            var failure = gate.Begin(Now, player.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, skill.Value, 0);
             if (failure != CastFailure.None) { ShowFailure(failure); return; }
             if (axe == null || (player.GetCurrentWeapon() != axe && !player.EquipItem(axe))) { Cancel(); Show("Unable to equip axe."); return; }
             aimAxe = axe; nextPreview = 0;
@@ -127,20 +111,13 @@ public sealed class Plugin : BaseUnityPlugin
         var p = player!; var origin = p.transform.position; var dir = Direction(p); var axe = BestAxe(p);
         float castRange = range.Value, castAngle = angle.Value, castSpeed = speed.Value;
         var targets = Targets.Find(origin, dir, castRange, castAngle, axe?.m_shared.m_toolTier ?? -1, stumps.Value, vines.Value);
-        var failure = gate.Release(Now, p.GetSkillLevel(Skills.SkillType.WoodCutting), p.GetInventory().CountItems(RuneName), axe?.m_shared.m_toolTier, skill.Value, runeCost.Value, cooldown.Value, targets.Count, n => PayRunes(p, n));
+        var failure = gate.Release(Now, p.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, skill.Value, 0, cooldown.Value, targets.Count, _ => true);
         effects.Clear(); preview.Clear(); aimAxe = null;
         if (failure != CastFailure.None) { ShowFailure(failure); return; }
         p.m_customData[CooldownKey] = gate.ReadyAt.ToString("R", CultureInfo.InvariantCulture);
         // Set cooldown before any effect or world operation. A thrown visual error cannot permit a free repeat.
         flight = StartCoroutine(Launch(p, origin, dir, axe!.m_shared.m_toolTier, targets, castRange, castAngle, castSpeed));
         Show("Axtral Projection cast!");
-    }
-    private static bool PayRunes(Player p, int amount)
-    {
-        var inv = p.GetInventory(); int before = inv.CountItems(RuneName);
-        if (before < amount) return false;
-        inv.RemoveItem(RuneName, amount);
-        return inv.CountItems(RuneName) == before - amount;
     }
     private IEnumerator Launch(Player p, Vector3 origin, Vector3 dir, int tier, List<Target> targets, float castRange, float castAngle, float castSpeed)
     {
@@ -193,9 +170,7 @@ public sealed class Plugin : BaseUnityPlugin
             case CastFailure.Cooldown: Show($"Axtral Projection: {Math.Ceiling(gate.ReadyAt - Now)}s cooldown."); break;
             case CastFailure.Skill: Show($"Requires Woodcutting level {skill.Value}."); break;
             case CastFailure.Axe: Show("Requires an unbroken woodcutting axe in inventory."); break;
-            case CastFailure.Runes: Show($"Requires {runeCost.Value} Axtral Runes."); break;
             case CastFailure.NoTargets: Show("No eligible trees or stumps in the cone."); break;
-            case CastFailure.PaymentFailed: Show("Rune payment failed; spell cancelled."); break;
             default: Show("Spell cancelled."); break;
         }
     }
@@ -205,7 +180,7 @@ public sealed class Plugin : BaseUnityPlugin
         string text = gate.Aiming ? $"Axtral Projection — {preview.Count} targets\nRelease {castKey.Value} to cast · Right mouse to cancel" : Now < gate.ReadyAt ? $"Axtral Projection · {Math.Ceiling(gate.ReadyAt - Now)}s" : Time.unscaledTime < feedbackUntil ? feedback : "";
         if (text.Length > 0) GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height * 0.72f, 440, 55), text);
     }
-    private void OnDestroy() { Cancel(); StopFlight(); effects.Dispose(); PrefabManager.OnVanillaPrefabsAvailable -= RegisterRune; harmony?.UnpatchSelf(); instance = null; }
+    private void OnDestroy() { Cancel(); StopFlight(); effects.Dispose(); harmony?.UnpatchSelf(); instance = null; }
     [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.StartAttack))]
     private static class PreventAttackWhileAiming
     {
