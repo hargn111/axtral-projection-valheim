@@ -9,7 +9,7 @@ internal sealed class PreviewEffects
     private readonly Dictionary<int, Highlight> highlights = new Dictionary<int, Highlight>();
     private Material? material;
     private LineRenderer? cone;
-    public void Set(List<Target> targets, Vector3 origin, Vector3 forward, float range, float angle)
+    public void Set(List<Target> targets, Vector3 origin, Vector3 forward, float range, float angle, float width)
     {
         if (!material) material = SpellEffects.Material(new Color(0.15f, 1f, 0.3f));
         var ids = new HashSet<int>(targets.Where(t => t.Object).Select(t => t.Object.GetInstanceID()));
@@ -17,10 +17,13 @@ internal sealed class PreviewEffects
         foreach (var target in targets)
             if (target.Object && !highlights.ContainsKey(target.Object.GetInstanceID())) highlights.Add(target.Object.GetInstanceID(), new Highlight(target, material));
         if (!cone) cone = SpellEffects.Line("Axtral aim cone", material, 0.06f);
-        cone!.positionCount = 27;
-        var points = new Vector3[27]; points[0] = origin + Vector3.up * 0.2f;
-        for (int i = 0; i < 25; i++) points[i + 1] = points[0] + Quaternion.AngleAxis(-angle / 2 + angle * i / 24, Vector3.up) * forward * range;
-        points[26] = points[0]; cone.SetPositions(points);
+        var right = new Vector3(forward.z, 0, -forward.x);
+        var start = origin + Vector3.up * 0.2f;
+        float nearHalf = width / 2, farHalf = nearHalf + range * Mathf.Tan(angle * Mathf.Deg2Rad / 2);
+        cone!.positionCount = 5;
+        cone.SetPositions(new[] { start - right * nearHalf, start + right * nearHalf,
+            start + forward * range + right * farHalf, start + forward * range - right * farHalf,
+            start - right * nearHalf });
     }
     public void Clear()
     {
@@ -74,6 +77,7 @@ internal static class SpellEffects
     }
     public static GameObject CreateAxe()
     {
+        // TODO(real-axe): replace spectral mesh with a non-networked equipped-axe visual.
         var axe = new GameObject("Axtral astral axe") { layer = 2 };
         var cleanup = axe.AddComponent<GeneratedAssets>();
         var mat = Material(new Color(0.25f, 0.8f, 1f)); cleanup.Material = mat;

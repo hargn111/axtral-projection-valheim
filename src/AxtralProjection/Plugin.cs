@@ -106,8 +106,8 @@ public sealed class Plugin : BaseUnityPlugin
             if (!Input.GetKey(castKey.Value)) { Release(); return; }
             if (Time.unscaledTime >= nextPreview)
             {
-                preview = Targets.Find(player.transform.position, Direction(player), Range, Angle, aimAxe!.m_shared.m_toolTier, stumps.Value, additional.Value);
-                effects.Set(preview, player.transform.position, Direction(player), Range, Angle);
+                preview = Targets.Find(player.transform.position, Direction(player), Range, Angle, aimAxe!.m_shared.m_toolTier, stumps.Value, additional.Value, excluded.Value, StartWidth, MaxTrees);
+                effects.Set(preview, player.transform.position, Direction(player), Range, Angle, StartWidth);
                 nextPreview = Time.unscaledTime + 0.1f;
             }
         }
@@ -124,17 +124,17 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (!player) { Cancel(); return; }
         var p = player!; var origin = p.transform.position; var dir = Direction(p); var axe = BestAxe(p);
-        float castRange = Range, castAngle = Angle, castSpeed = Speed;
-        var targets = Targets.Find(origin, dir, castRange, castAngle, axe?.m_shared.m_toolTier ?? -1, stumps.Value, additional.Value);
+        float castRange = Range, castAngle = Angle, castSpeed = Speed, castWidth = StartWidth;
+        var targets = Targets.Find(origin, dir, castRange, castAngle, axe?.m_shared.m_toolTier ?? -1, stumps.Value, additional.Value, excluded.Value, StartWidth, MaxTrees);
         var failure = gate.Release(Now, p.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, RequiredSkill, 0, Cooldown, targets.Count, _ => true);
         effects.Clear(); preview.Clear(); aimAxe = null;
         if (failure != CastFailure.None) { ShowFailure(failure); return; }
         p.m_customData[CooldownKey] = gate.ReadyAt.ToString("R", CultureInfo.InvariantCulture);
         // Set cooldown before any effect or world operation. A thrown visual error cannot permit a free repeat.
-        flight = StartCoroutine(Launch(p, origin, dir, axe!.m_shared.m_toolTier, targets, castRange, castAngle, castSpeed));
+        flight = StartCoroutine(Launch(p, origin, dir, axe!.m_shared.m_toolTier, targets, castRange, castAngle, castSpeed, castWidth));
         Show("Axtral Projection cast!");
     }
-    private IEnumerator Launch(Player p, Vector3 origin, Vector3 dir, int tier, List<Target> targets, float castRange, float castAngle, float castSpeed)
+    private IEnumerator Launch(Player p, Vector3 origin, Vector3 dir, int tier, List<Target> targets, float castRange, float castAngle, float castSpeed, float castWidth)
     {
         try
         {
@@ -143,11 +143,11 @@ public sealed class Plugin : BaseUnityPlugin
             {
                 if (!p || p != Player.m_localPlayer || p.IsDead() || p.IsTeleporting()) yield break;
                 SpellEffects.MoveAxe(axeVisual, origin + Vector3.up * 1.5f + dir * traveled, dir, traveled, castAngle);
-                while (index < targets.Count && (!targets[index].Object || Vector3.Distance(origin, targets[index].Position) <= traveled))
+                while (index < targets.Count && (!targets[index].Object || targets[index].ForwardDistance(origin, dir) <= traveled))
                 {
                     var target = targets[index++];
                     if (!target.Object) continue;
-                    try { Targets.Hit(target, p, origin, dir, tier, castRange, castAngle); }
+                    try { Targets.Hit(target, p, origin, dir, tier, castRange, castAngle, castWidth); }
                     catch (Exception e) { Logger.LogWarning("Could not hit target: " + e.Message); }
                 }
                 if (traveled >= castRange) break;
@@ -185,7 +185,7 @@ public sealed class Plugin : BaseUnityPlugin
             case CastFailure.Cooldown: Show($"Axtral Projection: {Math.Ceiling(gate.ReadyAt - Now)}s cooldown."); break;
             case CastFailure.Skill: Show($"Requires Woodcutting level {RequiredSkill}."); break;
             case CastFailure.Axe: Show("Requires an unbroken woodcutting axe in inventory."); break;
-            case CastFailure.NoTargets: Show("No eligible trees or stumps in the cone."); break;
+            case CastFailure.NoTargets: Show("No eligible trees or stumps in the targeting volume."); break;
             default: Show("Spell cancelled."); break;
         }
     }

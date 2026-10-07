@@ -11,23 +11,27 @@ internal sealed class Target
     public IDestructible Damageable { get; }
     public Collider Collider { get; }
     public int MinimumTier { get; }
+    public bool IsStump { get; }
+    public float Radius { get; }
+    public float ForwardDistance(Vector3 origin, Vector3 forward) => Mathf.Max(0, Vector3.Dot(Position - origin, forward));
     public Vector3 Position => Object.transform.position;
-    public Target(Component obj, IDestructible damageable, Collider collider, int tier)
-    { Object = obj; Damageable = damageable; Collider = collider; MinimumTier = tier; }
+    public Target(Component obj, IDestructible damageable, Collider collider, int tier, bool stump, float radius)
+    { Object = obj; Damageable = damageable; Collider = collider; MinimumTier = tier; IsStump = stump; Radius = radius; }
 }
 internal static class Targets
 {
     // Deliberately do not select TreeLog, characters, buildings or arbitrary destructibles.
-    public static List<Target> Find(Vector3 origin, Vector3 forward, float range, float angle, int tier, bool stumps, string vineNames)
+    public static List<Target> Find(Vector3 origin, Vector3 forward, float range, float angle, int tier, bool stumps, string additionalNames, string excludedNames, float width, int maxTrees)
     {
-        var extras = new HashSet<string>(vineNames.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries).Select(n => n.Trim()), StringComparer.Ordinal);
+        var extras = TargetSelection.Parse(additionalNames);
+        var excluded = TargetSelection.Parse(excludedNames);
         var seen = new HashSet<int>();
         var result = new List<Target>();
-        foreach (var collider in Physics.OverlapSphere(origin, range, ~0, QueryTriggerInteraction.Ignore))
+        foreach (var collider in Physics.OverlapSphere(origin, Mathf.Sqrt(range * range + Mathf.Pow(width / 2 + range * Mathf.Tan(angle * Mathf.Deg2Rad / 2), 2) + 100) + 2, ~0, QueryTriggerInteraction.Ignore))
         {
             Component? component = null;
             IDestructible? destructible = null;
-            int minTier = 0;
+            int minTier = 0; bool isStump = false;
             var tree = collider.GetComponentInParent<TreeBase>();
             if (tree) { component = tree; destructible = tree; minTier = tree.m_minToolTier; }
             else
@@ -35,27 +39,28 @@ internal static class Targets
                 var other = collider.GetComponentInParent<Destructible>();
                 if (!other || other.GetComponentInParent<Piece>() || other.GetComponentInParent<Character>() || other.GetComponentInParent<ItemDrop>()) continue;
                 string name = other.gameObject.name.Replace("(Clone)", "").Trim();
-                bool stump = stumps && other.m_destructibleType == DestructibleType.Tree && TargetRules.IsStump(name);
-                if (!stump && !extras.Contains(name)) continue;
+                isStump = other.m_destructibleType == DestructibleType.Tree && TargetRules.IsStump(name);
                 component = other; destructible = other; minTier = other.m_minToolTier;
             }
             if (component == null || destructible == null || !seen.Add(component.GetInstanceID())) continue;
+            if (!TargetSelection.Allowed(component.gameObject.name, tree, isStump, stumps, extras, excluded)) continue;
+            float radius = Mathf.Min(2, Mathf.Max(collider.bounds.extents.x, collider.bounds.extents.z));
             var nview = component.GetComponent<ZNetView>();
             if (!nview || !nview.IsValid()) continue;
             var delta = component.transform.position - origin;
-            if (!Cone.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, range, angle)) continue;
+            if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, radius, range, width, angle)) continue;
             if (!TargetRules.Eligible(true, PrivateArea.CheckAccess(component.transform.position, 0, false), minTier, tier)) continue;
-            result.Add(new Target(component, destructible, collider, minTier));
+            result.Add(new Target(component, destructible, collider, minTier, isStump, radius));
         }
-        return result.OrderBy(t => Vector3.Distance(origin, t.Position)).ToList();
+        return TargetSelection.Nearest(result, t => t.ForwardDistance(origin, forward), maxTrees);
     }
-    public static void Hit(Target target, Player player, Vector3 origin, Vector3 forward, int tier, float range, float angle)
+    public static void Hit(Target target, Player player, Vector3 origin, Vector3 forward, int tier, float range, float angle, float width)
     {
         if (!target.Object || !player || player.IsDead() || !target.Collider) return;
         var view = target.Object.GetComponent<ZNetView>();
         if (!view || !view.IsValid() || !PrivateArea.CheckAccess(target.Position, 0, false)) return;
-        var delta = target.Position - origin;
-        if (!Cone.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, range, angle) || tier < target.MinimumTier) return;
+        var delta = target.Position - origin; float radius = target.Radius;
+        if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, radius, range, width, angle) || tier < target.MinimumTier) return;
         var hit = new HitData { m_toolTier = (short)Math.Min(tier, short.MaxValue), m_point = target.Collider.ClosestPoint(target.Position + Vector3.up), m_dir = forward, m_pushForce = 0 };
         hit.m_damage.m_chop = 1000000f;
         hit.SetAttacker(player);
