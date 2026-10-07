@@ -23,7 +23,9 @@ public sealed class Plugin : BaseUnityPlugin
     private const string CooldownKey = Guid + ".readyAt";
     private static Plugin? instance;
     private Harmony harmony = null!;
-    private ConfigEntry<KeyCode> castKey = null!;
+    private const string CastButton = "AxtralProjectionCast";
+    private ConfigEntry<KeyboardShortcut> castKey = null!;
+    private ConfigEntry<InputManager.GamepadButton> gamepad = null!;
     private ConfigEntry<float> range = null!, angle = null!, cooldown = null!, skill = null!, speed = null!, startWidth = null!, durability = null!, xp = null!;
     private ConfigEntry<int> maxTrees = null!;
     private ConfigEntry<ElderRequirement> elder = null!;
@@ -47,7 +49,11 @@ public sealed class Plugin : BaseUnityPlugin
     {
         instance = this;
         GameCompat.Log = Logger;
-        castKey = Config.Bind("Controls", "CastKey", KeyCode.G, "Hold to aim; release to cast. Right mouse or Escape cancels.");
+        castKey = Config.Bind("Controls", "CastKey", new KeyboardShortcut(KeyCode.G, KeyCode.LeftShift), "Hold to aim; release to cast. Right mouse or Escape cancels.");
+        gamepad = Config.Bind("Controls", "GamepadButton", InputManager.GamepadButton.None, "Optional gamepad cast binding; None disables it to avoid vanilla conflicts.");
+        InputManager.Instance.AddButton(Guid, new ButtonConfig { Name = CastButton, ShortcutConfig = castKey, GamepadConfig = gamepad, ActiveInGUI = false, ActiveInCustomGUI = false });
+        castKey.SettingChanged += ControlsChanged;
+        gamepad.SettingChanged += ControlsChanged;
         range = Synced("Range", 20f, 10f, 50f, "Maximum range in meters.");
         angle = Synced("ConeAngle", 30f, 20f, 45f, "Full cone width in degrees, not half-angle.");
         cooldown = Synced("Cooldown", 180f, 0f, 600f, "Cooldown in seconds after a successful cast.");
@@ -63,7 +69,7 @@ public sealed class Plugin : BaseUnityPlugin
         elder = Config.Bind("Spell", "ElderRequirement", ElderRequirement.Slotted, new ConfigDescription("None, Slotted (chosen Forsaken Power), or Active.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         harmony = new Harmony(Guid);
         harmony.PatchAll(typeof(Plugin).Assembly);
-        Logger.LogInfo("Axtral Projection 0.1.0 loaded. Hold G to aim, release to cast.");
+        Logger.LogInfo("Axtral Projection 0.1.0 loaded. Hold the configured shortcut to aim; release to cast.");
     }
     private ConfigEntry<float> Synced(string name, float value, float min, float max, string description) => Config.Bind("Spell", name, value, new ConfigDescription(description, new AcceptableValueRange<float>(min, max), new ConfigurationManagerAttributes { IsAdminOnly = true }));
     private float Range => ConfigBounds.Clamp(range.Value, 10, 50, 20);
@@ -75,7 +81,7 @@ public sealed class Plugin : BaseUnityPlugin
     private float DurabilityPercent => ConfigBounds.Clamp(durability.Value, 0, 25, 1);
     private float SkillXp => ConfigBounds.Clamp(xp.Value, 0, 1, 0);
     private int MaxTrees => ConfigBounds.Clamp(maxTrees.Value, 2, 50);
-    private static bool InputBlocked() => UnityEngine.Application.isFocused == false || Time.timeScale == 0 || global::Console.IsVisible() || InventoryGui.IsVisible() || Menu.IsVisible() || TextInput.IsVisible() || (Chat.instance && Chat.instance.HasFocus());
+    private static bool InputBlocked() => UnityEngine.Application.isFocused == false || Time.timeScale == 0 || global::Console.IsVisible() || InventoryGui.IsVisible() || Menu.IsVisible() || TextInput.IsVisible() || (Chat.instance && Chat.instance.HasFocus()) || (Minimap.instance && Minimap.InTextInput());
     private static bool Unsafe(Player p) => p.IsDead() || p.IsTeleporting() || p.InCutscene() || p.InPlaceMode() || p.InDodge() || p.IsSwimming() || p.IsAttached() || p.InAttack();
     private static ItemDrop.ItemData? BestAxe(Player p) => p.GetInventory().GetAllItems().Where(i => i.m_shared.m_skillType == Skills.SkillType.Axes && i.GetDamage().m_chop > 0 && (!i.m_shared.m_useDurability || i.m_durability > 0)).OrderByDescending(i => i.m_shared.m_toolTier).ThenByDescending(i => i.GetDamage().m_chop).FirstOrDefault();
     private static Vector3 Direction(Player p)
@@ -105,7 +111,7 @@ public sealed class Plugin : BaseUnityPlugin
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)) { Cancel(); return; }
             if (player.GetCurrentWeapon() != aimAxe || BestAxe(player) != aimAxe) { Cancel(); Show("Axe changed: spell cancelled."); return; }
             // GetKey rather than GetKeyUp also handles a remapped key or a lost release event.
-            if (!Input.GetKey(castKey.Value)) { Release(); return; }
+            if (!ZInput.GetButton(CastButton)) { Release(); return; }
             if (Time.unscaledTime >= nextPreview)
             {
                 preview = Targets.Find(player.transform.position, Direction(player), Range, Angle, aimAxe!.m_shared.m_toolTier, stumps.Value, additional.Value, excluded.Value, StartWidth, MaxTrees);
@@ -113,7 +119,7 @@ public sealed class Plugin : BaseUnityPlugin
                 nextPreview = Time.unscaledTime + 0.1f;
             }
         }
-        else if (Input.GetKeyDown(castKey.Value) && flight == null)
+        else if (ZInput.GetButtonDown(CastButton) && flight == null)
         {
             var axe = BestAxe(player);
             var failure = gate.Begin(Now, player.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, RequiredSkill, 0);
@@ -211,7 +217,9 @@ public sealed class Plugin : BaseUnityPlugin
         string text = gate.Aiming ? $"Axtral Projection — {preview.Count} targets\nRelease {castKey.Value} to cast · Right mouse to cancel" : Now < gate.ReadyAt ? $"Axtral Projection · {Math.Ceiling(gate.ReadyAt - Now)}s" : Time.unscaledTime < feedbackUntil ? feedback : "";
         if (text.Length > 0) GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height * 0.72f, 440, 55), text);
     }
-    private void OnDestroy() { Cancel(); StopFlight(); effects.Dispose(); harmony?.UnpatchSelf(); instance = null; }
+    private void ControlsChanged(object sender, EventArgs e) { Cancel(); }
+    private void OnDisable() { Cancel(); StopFlight(); }
+    private void OnDestroy() { castKey.SettingChanged -= ControlsChanged; gamepad.SettingChanged -= ControlsChanged; Cancel(); StopFlight(); effects.Dispose(); harmony?.UnpatchSelf(); instance = null; }
     [HarmonyPatch(typeof(Humanoid), nameof(Humanoid.StartAttack))]
     private static class PreventAttackWhileAiming
     {
