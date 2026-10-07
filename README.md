@@ -4,7 +4,7 @@
 
 Hold **G** to aim and release **G** to cast; moving does not release the spell. Unmet Elder requirements warn before aiming/highlighting. Right mouse/Escape cancels. The highest-tier unbroken inventory axe is automatically equipped and must remain equipped at release. Defaults require **wood cutting level 15** and **the Elder's power active** (`Active`).
 
-Targeting uses the tree base at ground level, not canopy/collider bounds. Its X/Z base point must fall inside the terrain-following trapezoid: 1 meter wide at the start, widening at 30 degrees over 15 meters, with base elevations within ±10 meters. Up to 15 counted targets are selected nearest-forward first. `Birch_Sapling` is included without consuming target slots; exclusions still apply. An angle of 0 makes a straight rectangle. Native chop damage preserves drops, falling logs, wards and tool-tier restrictions.
+Targeting uses the tree base at ground level, not canopy/collider bounds. Its X/Z base point must fall inside the terrain-following trapezoid: 1 meter wide at the start, widening at 30 degrees over 15 meters, with base elevations within ±10 meters. Up to 15 counted targets are selected nearest-forward first. `Beech_small1` and `Beech_small2` are included without consuming target slots; exclusions still apply. An angle of 0 makes a straight rectangle. Native chop damage preserves drops, falling logs, wards and tool-tier restrictions.
 
 Charges are progressive: 2% max axe durability per non-stump hit; the breaking hit lands and stops the remaining flight. Skill XP defaults to zero. Successful nonempty casts apply **Axtral Exhaustion** for 180 seconds in the normal status-effect area. No custom cooldown UI or relog persistence layer remains; Exhaustion follows normal Valheim status-effect lifecycle.
 
@@ -19,7 +19,7 @@ See the [player guide](package/README.md). Install BepInExPack_Valheim and Jotun
 | Range | 15 | 10–50 meters |
 | ConeAngle | 30 | 0–45 degrees, full widening angle |
 | StartWidth | 1 | 0–3 meters, full width at origin |
-| MaxTrees | 15 | 2–50 counted targets, nearest forward first; Birch_Sapling is uncapped |
+| MaxTrees | 15 | 2–50 counted targets, nearest forward first; Beech_small1 and Beech_small2 are uncapped |
 | Cooldown | 180 | 0–600 seconds; 0 disables Exhaustion |
 | WoodCuttingLevel | 15 | 0–100, required wood cutting skill level |
 | TravelSpeed | 10 | 1–50 meters/second |

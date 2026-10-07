@@ -14,7 +14,7 @@ Heading is normalized and horizontal. For forward distance `f`, half-width is `S
 
 The physics overlap encloses the far trapezoid corners and height band, plus a bounded margin. A non-trigger collider intersecting the base-height band is preferred over an arbitrary canopy collider; it is used only for the native hit point, never for expanding eligibility. A runtime test must confirm root positions on supported tree prefabs. Deduplicate components; never scan the entire world.
 
-Logs, characters, pieces and item drops are excluded. Existing tree stumps are optional and cannot bypass ClearStumps via AdditionalPrefabs. Exact prefab names are trimmed and have `(Clone)` removed; exclusions override vanilla and additional inclusion. Birch_Sapling is explicitly allowed and bypasses MaxTrees accounting while retaining all other eligibility and non-stump durability/XP rules. Recheck existence, ward access, geometry and tool tier at impact. New stumps/logs are not added to the snapshot.
+Logs, characters, pieces and item drops are excluded. Existing tree stumps are optional and cannot bypass ClearStumps via AdditionalPrefabs. Exact prefab names are trimmed and have `(Clone)` removed; exclusions override vanilla and additional inclusion. Beech_small1 and Beech_small2 are explicitly allowed and bypass MaxTrees accounting while retaining all other eligibility and non-stump durability/XP rules. Recheck existence, ward access, geometry and tool tier at impact. New stumps/logs are not added to the snapshot.
 
 ## Exhaustion and compatibility
 
