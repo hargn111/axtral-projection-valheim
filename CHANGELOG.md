@@ -2,6 +2,22 @@
 
 All notable changes are documented here using Keep a Changelog-style sections.
 
+## [0.2.1] - 2026-10-07
+
+### Fixed
+- Starting/holding aim now ignores unrelated movement keys. Configured modifiers gate starting only; release follows the initiating main key or controller button.
+- Unmet Slotted or Active Elder requirements warn before aiming/highlighting; release still rechecks them.
+- Target eligibility uses the ground-level tree-base point, without collider-radius padding. Preview boundary follows terrain while retaining matching X/Z geometry.
+
+### Changed
+- Default keybind is G; default Elder requirement is Active.
+- Default range is 15m, starting width 1m (bounds 0–3m), and durability cost 2%.
+- ConeAngle permits 0 degrees for a straight rectangle; default remains 30 degrees.
+
+### Added
+- Birch_Sapling is eligible without consuming MaxTrees slots; exclusion, ward, tier, geometry and normal non-stump durability/XP rules still apply.
+- Regression coverage for strict base-point bounds, input-device release ownership, Elder pre-aim denial and uncapped saplings.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added

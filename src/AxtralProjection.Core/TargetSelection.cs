@@ -10,7 +10,22 @@ public static class TargetSelection
     {
         name = Name(name);
         if (excluded.Contains(name) || (stump && !clearStumps)) return false;
-        return tree || (stump && clearStumps) || additional.Contains(name);
+        return tree || (stump && clearStumps) || IsUncappedSapling(name) || additional.Contains(name);
     }
-    public static List<T> Nearest<T>(IEnumerable<T> candidates, Func<T, double> forward, int cap) => candidates.OrderBy(forward).Take(Math.Max(0, cap)).ToList();
+    public static bool IsUncappedSapling(string name) => name.Replace("(Clone)", "").Trim() == "Birch_Sapling";
+    public static List<T> Nearest<T>(IEnumerable<T> targets, Func<T, double> forward, int maximum, Func<T, bool>? countsTowardLimit = null)
+    {
+        int remaining = Math.Max(0, maximum);
+        var result = new List<T>();
+        foreach (var target in targets.OrderBy(forward))
+        {
+            if (countsTowardLimit == null || countsTowardLimit(target))
+            {
+                if (remaining == 0) continue;
+                remaining--;
+            }
+            result.Add(target);
+        }
+        return result;
+    }
 }
