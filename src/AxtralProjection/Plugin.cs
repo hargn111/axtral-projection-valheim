@@ -24,9 +24,10 @@ public sealed class Plugin : BaseUnityPlugin
     private static Plugin? instance;
     private Harmony harmony = null!;
     private ConfigEntry<KeyCode> castKey = null!;
-    private ConfigEntry<float> range = null!, angle = null!, cooldown = null!, skill = null!, speed = null!;
+    private ConfigEntry<float> range = null!, angle = null!, cooldown = null!, skill = null!, speed = null!, startWidth = null!, durability = null!, xp = null!;
+    private ConfigEntry<int> maxTrees = null!;
     private ConfigEntry<bool> stumps = null!;
-    private ConfigEntry<string> vines = null!;
+    private ConfigEntry<string> additional = null!, excluded = null!;
     private Player? player;
     private CastGate gate = new CastGate();
     private ItemDrop.ItemData? aimAxe;
@@ -46,18 +47,32 @@ public sealed class Plugin : BaseUnityPlugin
         instance = this;
         GameCompat.Log = Logger;
         castKey = Config.Bind("Controls", "CastKey", KeyCode.G, "Hold to aim; release to cast. Right mouse or Escape cancels.");
-        range = Synced("Range", 30f, 1f, 100f, "Maximum range in meters.");
-        angle = Synced("ConeAngle", 30f, 1f, 180f, "Full cone width in degrees, not half-angle.");
-        cooldown = Synced("Cooldown", 45f, 0f, 600f, "Cooldown in seconds after a successful cast.");
-        skill = Synced("WoodcuttingLevel", 11f, 0f, 100f, "Required Woodcutting skill.");
-        speed = Synced("TravelSpeed", 30f, 1f, 100f, "Astral wave travel speed in meters per second.");
-        stumps = Config.Bind("Spell", "ClearStumps", true, new ConfigDescription("Include existing tree stumps. Newly spawned stumps are left for a later cast.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
-        vines = Config.Bind("Spell", "VinePrefabs", "", new ConfigDescription("Comma-separated exact Destructible prefab names from other mods. Empty by default: no verified vanilla cave-vine equivalent.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        range = Synced("Range", 20f, 10f, 50f, "Maximum range in meters.");
+        angle = Synced("ConeAngle", 30f, 20f, 45f, "Full cone width in degrees, not half-angle.");
+        cooldown = Synced("Cooldown", 180f, 0f, 600f, "Cooldown in seconds after a successful cast.");
+        skill = Synced("WoodCuttingLevel", 15f, 0f, 100f, "Required wood cutting skill level.");
+        speed = Synced("TravelSpeed", 10f, 1f, 50f, "Astral wave travel speed in meters per second.");
+        stumps = Config.Bind("Spell", "ClearStumps", false, new ConfigDescription("Include existing tree stumps. Newly spawned stumps are left for a later cast.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        additional = Config.Bind("Spell", "AdditionalPrefabs", "", new ConfigDescription("Comma-separated exact Destructible prefab names from other mods.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        startWidth = Synced("StartWidth", 3f, 0f, 10f, "Full starting width in meters.");
+        durability = Synced("DurabilityCostPercent", 1f, 0f, 25f, "Percent of axe max durability per tree hit; 0 disables.");
+        xp = Synced("SkillXpPerTree", 0f, 0f, 1f, "Wood cutting skill gain per tree hit; 0 disables.");
+        maxTrees = Config.Bind("Spell", "MaxTrees", 15, new ConfigDescription("Maximum trees per cast, nearest forward first.", new AcceptableValueRange<int>(2, 50), new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        excluded = Config.Bind("Spell", "ExcludedPrefabs", "", new ConfigDescription("Comma-separated exact prefab names to never fell. Exclusion wins.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         harmony = new Harmony(Guid);
         harmony.PatchAll(typeof(Plugin).Assembly);
         Logger.LogInfo("Axtral Projection 0.1.0 loaded. Hold G to aim, release to cast.");
     }
     private ConfigEntry<float> Synced(string name, float value, float min, float max, string description) => Config.Bind("Spell", name, value, new ConfigDescription(description, new AcceptableValueRange<float>(min, max), new ConfigurationManagerAttributes { IsAdminOnly = true }));
+    private float Range => ConfigBounds.Clamp(range.Value, 10, 50, 20);
+    private float Angle => ConfigBounds.Clamp(angle.Value, 20, 45, 30);
+    private float Cooldown => ConfigBounds.Clamp(cooldown.Value, 0, 600, 180);
+    private float RequiredSkill => ConfigBounds.Clamp(skill.Value, 0, 100, 15);
+    private float Speed => ConfigBounds.Clamp(speed.Value, 1, 50, 10);
+    private float StartWidth => ConfigBounds.Clamp(startWidth.Value, 0, 10, 3);
+    private float DurabilityPercent => ConfigBounds.Clamp(durability.Value, 0, 25, 1);
+    private float SkillXp => ConfigBounds.Clamp(xp.Value, 0, 1, 0);
+    private int MaxTrees => ConfigBounds.Clamp(maxTrees.Value, 2, 50);
     private static bool InputBlocked() => UnityEngine.Application.isFocused == false || Time.timeScale == 0 || global::Console.IsVisible() || InventoryGui.IsVisible() || Menu.IsVisible() || TextInput.IsVisible() || (Chat.instance && Chat.instance.HasFocus());
     private static bool Unsafe(Player p) => p.IsDead() || p.IsTeleporting() || p.InCutscene() || p.InPlaceMode() || p.InDodge() || p.IsSwimming() || p.IsAttached() || p.InAttack();
     private static ItemDrop.ItemData? BestAxe(Player p) => p.GetInventory().GetAllItems().Where(i => i.m_shared.m_skillType == Skills.SkillType.Axes && i.GetDamage().m_chop > 0 && (!i.m_shared.m_useDurability || i.m_durability > 0)).OrderByDescending(i => i.m_shared.m_toolTier).ThenByDescending(i => i.GetDamage().m_chop).FirstOrDefault();
@@ -91,15 +106,15 @@ public sealed class Plugin : BaseUnityPlugin
             if (!Input.GetKey(castKey.Value)) { Release(); return; }
             if (Time.unscaledTime >= nextPreview)
             {
-                preview = Targets.Find(player.transform.position, Direction(player), range.Value, angle.Value, aimAxe!.m_shared.m_toolTier, stumps.Value, vines.Value);
-                effects.Set(preview, player.transform.position, Direction(player), range.Value, angle.Value);
+                preview = Targets.Find(player.transform.position, Direction(player), Range, Angle, aimAxe!.m_shared.m_toolTier, stumps.Value, additional.Value);
+                effects.Set(preview, player.transform.position, Direction(player), Range, Angle);
                 nextPreview = Time.unscaledTime + 0.1f;
             }
         }
         else if (Input.GetKeyDown(castKey.Value) && flight == null)
         {
             var axe = BestAxe(player);
-            var failure = gate.Begin(Now, player.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, skill.Value, 0);
+            var failure = gate.Begin(Now, player.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, RequiredSkill, 0);
             if (failure != CastFailure.None) { ShowFailure(failure); return; }
             if (axe == null || (player.GetCurrentWeapon() != axe && !player.EquipItem(axe))) { Cancel(); Show("Unable to equip axe."); return; }
             aimAxe = axe; nextPreview = 0;
@@ -109,9 +124,9 @@ public sealed class Plugin : BaseUnityPlugin
     {
         if (!player) { Cancel(); return; }
         var p = player!; var origin = p.transform.position; var dir = Direction(p); var axe = BestAxe(p);
-        float castRange = range.Value, castAngle = angle.Value, castSpeed = speed.Value;
-        var targets = Targets.Find(origin, dir, castRange, castAngle, axe?.m_shared.m_toolTier ?? -1, stumps.Value, vines.Value);
-        var failure = gate.Release(Now, p.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, skill.Value, 0, cooldown.Value, targets.Count, _ => true);
+        float castRange = Range, castAngle = Angle, castSpeed = Speed;
+        var targets = Targets.Find(origin, dir, castRange, castAngle, axe?.m_shared.m_toolTier ?? -1, stumps.Value, additional.Value);
+        var failure = gate.Release(Now, p.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, RequiredSkill, 0, Cooldown, targets.Count, _ => true);
         effects.Clear(); preview.Clear(); aimAxe = null;
         if (failure != CastFailure.None) { ShowFailure(failure); return; }
         p.m_customData[CooldownKey] = gate.ReadyAt.ToString("R", CultureInfo.InvariantCulture);
@@ -168,7 +183,7 @@ public sealed class Plugin : BaseUnityPlugin
         switch (failure)
         {
             case CastFailure.Cooldown: Show($"Axtral Projection: {Math.Ceiling(gate.ReadyAt - Now)}s cooldown."); break;
-            case CastFailure.Skill: Show($"Requires Woodcutting level {skill.Value}."); break;
+            case CastFailure.Skill: Show($"Requires Woodcutting level {RequiredSkill}."); break;
             case CastFailure.Axe: Show("Requires an unbroken woodcutting axe in inventory."); break;
             case CastFailure.NoTargets: Show("No eligible trees or stumps in the cone."); break;
             default: Show("Spell cancelled."); break;
