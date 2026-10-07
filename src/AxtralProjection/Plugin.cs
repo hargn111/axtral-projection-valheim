@@ -68,7 +68,7 @@ public sealed class Plugin : BaseUnityPlugin
         startWidth = Synced("StartWidth", 1f, 0f, 3f, "Full starting width in meters.");
         durability = Synced("DurabilityCostPercent", 2f, 0f, 25f, "Percent of axe max durability per tree hit; 0 disables.");
         xp = Synced("SkillXpPerTree", 0f, 0f, 1f, "Wood cutting skill gain per tree hit; 0 disables.");
-        maxTrees = Config.Bind("Spell", "MaxTrees", 15, new ConfigDescription("Maximum counted targets per cast, nearest forward first. Birch_Sapling does not consume a slot.", new AcceptableValueRange<int>(2, 50), new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        maxTrees = Config.Bind("Spell", "MaxTrees", 15, new ConfigDescription("Maximum counted targets per cast, nearest forward first. Beech_small1 and Beech_small2 do not consume a slot.", new AcceptableValueRange<int>(2, 50), new ConfigurationManagerAttributes { IsAdminOnly = true }));
         excluded = Config.Bind("Spell", "ExcludedPrefabs", "", new ConfigDescription("Comma-separated exact prefab names to never fell. Exclusion wins.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         elder = Config.Bind("Spell", "ElderRequirement", ElderRequirement.Active, new ConfigDescription("None, Slotted (chosen Forsaken Power), or Active.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         exhaustion = new Exhaustion();

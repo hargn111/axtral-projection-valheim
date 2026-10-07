@@ -8,7 +8,7 @@ Hold **G** to aim; release **G** to cast. Movement keys do not interrupt aiming.
 
 **Default requirements: wood cutting level 15, an unbroken woodcutting axe, and the Elder's power active.** The highest-tier eligible inventory axe is automatically equipped. It must stay equipped through release. The chosen axe must remain in inventory during flight.
 
-The terrain-following preview is a trapezoid: 1 meter wide at your feet, widening at a 30-degree angle over 15 meters. Only the ground-level tree-base X/Z point counts; no trunk or canopy radius expands it. Up to 15 counted targets are selected, nearest forward first. `Birch_Sapling` can also be cut without consuming a target slot. An angle of 0 makes a straight rectangle. Stumps are off by default. Logs, creatures, buildings and dropped items are never selected.
+The terrain-following preview is a trapezoid: 1 meter wide at your feet, widening at a 30-degree angle over 15 meters. Only the ground-level tree-base X/Z point counts; no trunk or canopy radius expands it. Up to 15 counted targets are selected, nearest forward first. `Beech_small1` and `Beech_small2` can also be cut without consuming a target slot. An angle of 0 makes a straight rectangle. Stumps are off by default. Logs, creatures, buildings and dropped items are never selected.
 
 Each non-stump target hit costs **2% of that axe's maximum durability**. Charges happen as the wave reaches targets, not upfront. The breaking hit lands; remaining hits stop. No skill XP is granted by default.
 
@@ -35,7 +35,7 @@ Spell values have visible bounds and are clamped when read. Configuration-manage
 | Range | 15 | 10–50 meters |
 | ConeAngle | 30 | 0–45 degrees, full widening angle |
 | StartWidth | 1 | 0–3 meters, full width at origin |
-| MaxTrees | 15 | 2–50 counted targets, nearest forward first; Birch_Sapling is uncapped |
+| MaxTrees | 15 | 2–50 counted targets, nearest forward first; Beech_small1 and Beech_small2 are uncapped |
 | Cooldown | 180 | 0–600 seconds; 0 disables Exhaustion |
 | WoodCuttingLevel | 15 | 0–100, required wood cutting skill level |
 | TravelSpeed | 10 | 1–50 meters/second |

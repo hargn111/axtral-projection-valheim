@@ -15,7 +15,7 @@ All notable changes are documented here using Keep a Changelog-style sections.
 - ConeAngle permits 0 degrees for a straight rectangle; default remains 30 degrees.
 
 ### Added
-- Birch_Sapling is eligible without consuming MaxTrees slots; exclusion, ward, tier, geometry and normal non-stump durability/XP rules still apply.
+- Beech_small1 and Beech_small2 are eligible without consuming MaxTrees slots; exclusion, ward, tier, geometry and normal non-stump durability/XP rules still apply.
 - Regression coverage for strict base-point bounds, input-device release ownership, Elder pre-aim denial and uncapped saplings.
 
 ## [0.2.0] - 2026-10-07

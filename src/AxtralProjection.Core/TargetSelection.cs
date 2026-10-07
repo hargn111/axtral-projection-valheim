@@ -12,7 +12,7 @@ public static class TargetSelection
         if (excluded.Contains(name) || (stump && !clearStumps)) return false;
         return tree || (stump && clearStumps) || IsUncappedSapling(name) || additional.Contains(name);
     }
-    public static bool IsUncappedSapling(string name) => name.Replace("(Clone)", "").Trim() == "Birch_Sapling";
+    public static bool IsUncappedSapling(string name) => Name(name) == "Beech_small1" || Name(name) == "Beech_small2";
     public static List<T> Nearest<T>(IEnumerable<T> targets, Func<T, double> forward, int maximum, Func<T, bool>? countsTowardLimit = null)
     {
         int remaining = Math.Max(0, maximum);
