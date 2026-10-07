@@ -1,4 +1,6 @@
 import importlib.util
+import contextlib
+import io
 import json
 from pathlib import Path
 import shutil
@@ -107,9 +109,10 @@ class ReleaseTests(unittest.TestCase):
                 self.release.preflight(ROOT, "0.2.0", dry_run=False)
 
     def test_dry_run_builds_but_never_mutates_git_or_publishes(self):
-        with patch.object(self.release, "preflight"), patch.object(self.release, "validate", return_value="0.2.0"), patch.object(self.release, "build", return_value=ROOT / "artifacts/AxtralProjection-0.2.0.zip") as build, patch.object(self.release, "run") as run:
+        with patch.object(self.release, "preflight"), patch.object(self.release, "validate", return_value="0.2.0"), patch.object(self.release, "git", return_value="testedsha"), patch.object(self.release, "build", return_value=ROOT / "artifacts/AxtralProjection-0.2.0.zip") as build, patch.object(self.release, "run") as run, patch.object(Path, "write_text") as write, contextlib.redirect_stdout(io.StringIO()):
             self.release.main(["--dry-run"])
             build.assert_called_once()
+            write.assert_called_once_with(version.notes())
             run.assert_not_called()
 
 

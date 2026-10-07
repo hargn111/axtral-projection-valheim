@@ -94,7 +94,8 @@ public sealed class Plugin : BaseUnityPlugin
     private static Vector3 Direction(Player p)
     {
         var dir = p.GetLookDir(); dir.y = 0;
-        return dir.sqrMagnitude > 0.001f ? dir.normalized : p.transform.forward;
+        if (dir.sqrMagnitude <= 0.001f) { dir = p.transform.forward; dir.y = 0; }
+        return dir.normalized;
     }
     private void Update()
     {
