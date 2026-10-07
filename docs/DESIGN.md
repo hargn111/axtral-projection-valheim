@@ -1,46 +1,39 @@
-# Axtral Projection: first playable candidate
+# Axtral Projection design
 
-The supplied Dragonwilds spell description is the gameplay specification. This is an independent Valheim adaptation, not a port of RuneScape assets.
+## Aim, release and flight
 
-## Defaults and cast flow
+1. Configurable keyboard shortcut (default LeftShift+G) or independent optional gamepad binding begins aim. Silent Elder gating is deferred to release. Automatically equip the highest-tier unbroken woodcutting axe, breaking ties by chop damage.
+2. At 10 Hz, gather candidates with one bounded physics overlap, deduplicate colliders, filter by volume/ward/tool tier/prefab rules, and show green highlights, trapezoid outline and count. Preserve the procedural held-axe pose.
+3. Release rechecks the equipped cast-time axe, skill level, selected/active Elder requirement and native Exhaustion. Empty volumes are free. Successful casts snapshot configuration and apply Exhaustion before visuals or world hits.
+4. The unchanged spectral axe moves outward; a forward-distance frontier reaches snapshot targets nearest first, extending slightly past Range when an accepted edge trunk has its center beyond the endpoint. Native `IDestructible.Damage` preserves network ownership, falling logs and drops. There is no forced ownership, deletion or per-frame throttling.
+5. Charge percentage durability and optional XP only after a native non-stump hit is dispatched. The breaking hit lands, then flight stops. Skip charges at zero percent and for non-durable axes. Abort pending hits on missing/broken axe, death, teleport, logout/player replacement, disable or scene unload. Cleanup visual and pose/highlight resources.
 
-1. Hold **G** to begin aiming, requiring Woodcutting **11**, **10 Axtral Runes**, and an unbroken inventory axe with chop damage.
-2. Equip the highest tool-tier eligible axe; chop damage breaks ties. Normal attacks are blocked only for the local player while aiming.
-3. Aim with normal look controls. The horizontal cone is **30 degrees total** (±15 degrees) and its target roots must lie inside a **30-meter 3D range sphere**. Height counts toward distance, but the cone yaw ignores camera pitch.
-4. Update green renderer tints, ground rings, cone outline and target count at 10 Hz. A local procedural arm pose raises the equipped axe where the Animator exposes humanoid bones.
-5. Release G to snapshot the origin, heading, targets and travel settings. Recheck requirements and charge the rune cost exactly once. An empty cone is free.
-6. Set a **45-second cooldown** before starting effects or touching world state. Store the UTC ready-at timestamp in the character's custom data; character saves preserve it across relogs. Real time continues while offline or paused.
-7. Launch a procedural blue axe and expanding cone wave at **30 m/s**. Hit snapshot targets once as the distance frontier reaches them. Native chop damage is intentionally overwhelming, but native immunity and tool-tier checks remain in force.
+## Geometry
 
-Right mouse, Escape, menus, chat, loss of focus, changed/removed/broken axe, placement mode, swimming, dodging, attacking, teleporting or death cancel pre-casting without cost. Death, teleporting or a player change stop an already-paid flight; that cost is not refunded. The best axe stays equipped after cancellation/casting.
+Heading is normalized and horizontal. For forward distance `f`, half-width is `StartWidth/2 + max(f,0)*tan(ConeAngle/2)`. Include a target if `-r <= f <= Range+r` and absolute lateral distance is no greater than half-width plus trunk radius `r`. Base elevation tolerance is ±10 meters. Preview draws the center-volume trapezoid; tree radius expands individual eligibility.
 
-## Rune adaptation
+The physics overlap encloses the far trapezoid corners and height band, plus a bounded margin. A non-trigger collider intersecting the base-height band is preferred over an arbitrary canopy collider; its horizontal bounds approximate trunk radius. A runtime test must confirm this approximation on supported tree prefabs. Deduplicate components; never scan the entire world.
 
-Valheim has no Dragonwilds rune inventory. Register `AxtralRune` by cloning Amber with Jotunn; it currently retains Amber's visual/icon. At a level-one workbench, **2 Resin + 1 Greydwarf Eye produce 10 runes**. Stack limit 100, weight 0.1. This recipe is a first-pass Valheim balancing choice, not a claimed Dragonwilds recipe.
+Logs, characters, pieces and item drops are excluded. Existing tree stumps are optional and cannot bypass ClearStumps via AdditionalPrefabs. Exact prefab names are trimmed and have `(Clone)` removed; exclusions override vanilla and additional inclusion. Recheck existence, ward access, geometry and tool tier at impact. New stumps/logs are not added to the snapshot.
 
-## Supported targets and safeguards
+## Exhaustion and compatibility
 
-- Standing trees: `TreeBase`.
-- Existing stumps: `Destructible`, tree type, prefab name ending in `Stub`, case-insensitive. Configurable on/off. A cave/mod stump using another naming scheme is not assumed safe.
-- Optional vines: exact `Destructible` prefab names in `VinePrefabs`, empty by default. No vanilla cave-vine mapping has been verified. Explicit configuration is required for another mod's assets.
-- Never directly select logs, characters, dropped items or building pieces.
-- Deduplicate target components across colliders.
-- Require a valid network view, ward access and sufficient axe tool tier.
-- Recheck existence, ward access, cone/range and tier at impact.
-- Use native `Damage(HitData)` so native ownership, falling trunks, drops and effects remain intact. Do not delete objects or claim their network ownership.
+Jotunn `CustomStatusEffect` registers `SE_AxtralExhaustion` in ObjectDB, including its copied DB lifecycle. Immediately before applying, update the registered asset's TTL from the cast's Cooldown. Zero applies no effect. Use native icon/timer presentation, not a custom cooldown box. Aiming guidance remains.
 
-Newly created stumps and fallen logs are deliberately excluded from the snapshot; collect/chop logs normally and use a later cast for remaining stumps. The spell has no terrain/wall line-of-sight test, matching the supplied cone description. Falling trunks retain native physics and can still hurt players.
+The embedded 64×64 icon is isolated in one factory and decoded through Jotunn's AssetUtils compatibility bridge. There is **no custom relog persistence**; normal status-effect lifecycle applies, and death clears Exhaustion. Player.Save/Load in the supplied assembly does not serialize arbitrary effects; registration is for native lookup/cloning, not a promise of relog persistence.
 
-## Configuration and multiplayer
+GameCompat.Message discovers the current Character.Message signature and supplies trailing defaults. The import audit resolves all emitted game/Unity method and field references against local matching DLLs. It caught the prior four-argument Character.Message import. This mod does not patch CraftingStation.Interact; investigate that error among other installed mods.
 
-BepInEx writes `mod.axtralprojection.valheim.cfg`. `CastKey` is local. Spell settings are Jotunn admin-only synchronized values: Range 1–100, ConeAngle 1–180, Cooldown 0–600, WoodcuttingLevel 0–100, RuneCost 0–100, TravelSpeed 1–100, ClearStumps and VinePrefabs.
+## Config, multiplayer and deprecated code
 
-All peers and dedicated servers must install the same mod version and Jotunn because a custom inventory item is added. Dedicated servers register the item/config without running player input. Gameplay hits use native network routing. Aim highlights, procedural pose and flying axe are **local to the caster**; other players receive native tree destruction, not the custom visual effects.
+See README for bounds/defaults. Clamp numeric reads; no gameplay config cache is retained. Input bindings are Jotunn config-backed and use the registered GUID-suffixed names. Separate controller binding avoids requiring keyboard modifiers on a gamepad. Chat, console, inventory, menus, text entry, minimap pin input, lost focus and unsafe player states suppress aiming/casting.
 
-This is a **trusted-client co-op** implementation, not anti-cheat. Synchronized config does not make client skill, inventory, cooldown or damage claims server-authoritative. A malicious client can bypass these checks. Do not advertise hardened server enforcement.
+Jotunn `VersionCheckOnly` is the non-obsolete replacement for OnlySyncWhenInstalled. VersionStrictness.None permits vanilla-server clients; gameplay settings sync when both sides install the mod. This is trusted-client co-op; no authoritative enforcement is claimed. VFX remain local.
 
-## What requires runtime access
+Rune registration and resource-controller source are preserved under Deprecated/Runes, off by default. Re-enabling requires explicit reintegration, resource gates/config and a multiplayer compatibility policy. No active item, recipe, payment or RuneCost setting remains.
 
-No Unity editor is needed for this implementation. Valheim client access is needed to verify load order, rune/recipe registration, renderer shaders, bone axes, input order, actual tree damage and multiplayer ownership. Unity would be useful later for a polished held-axe animation, custom rune art and networked VFX, but is not a prerequisite for the current build.
+Compile baseline is supplied Valheim 1.0.2 game/Unity DLLs, Jotunn 2.30.2 and BepInEx 5.4.21 API. DLLs are ignored and never shipped. Static checks cannot prove runtime input ordering, tree geometry, status-effect behavior, rig/shader appearance or peer ownership.
 
-Compile baseline is explicitly pinned to ValheimGameLibs **0.221.4**, UnityEngine.Modules **2021.3.33**, Jotunn **2.30.2** and BepInEx API **5.4.21**. This is not a claim of compatibility with an untested later game version. Reference packages are compile-only and are never deployed with the mod.
+## Out of scope
+
+Real equipped-axe projectile (TODO marker only), per-frame throttling, tier-scaled geometry, Elder cooldown reductions, new CI workflows, replicated custom VFX and server-authoritative anti-cheat.

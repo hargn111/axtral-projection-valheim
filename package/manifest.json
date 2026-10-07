@@ -1,0 +1,10 @@
+{
+  "name": "AxtralProjection",
+  "version_number": "0.2.0",
+  "website_url": "https://github.com/hargn111/axtral-projection-valheim",
+  "description": "A spectral axe fells nearby trees with radius-aware targeting, progressive durability and Axtral Exhaustion.",
+  "dependencies": [
+    "denikson-BepInExPack_Valheim-5.4.2351",
+    "ValheimModding-Jotunn-2.30.2"
+  ]
+}

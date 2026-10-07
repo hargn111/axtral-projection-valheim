@@ -1,29 +1,22 @@
-# Verification and first in-game test
+# Verification and playtest checklist
 
-## Verified without Unity
+## Static checks
 
-- Actual `net48` BepInEx plugin compiles with warnings treated as errors.
-- Pure `netstandard2.0` spell logic is exercised by xUnit tests on .NET 8.
-- Geometry tests cover range, height, steering, full versus half-angle and invalid inputs.
-- Cast tests cover skill/rune/axe gates, cancellation, changed requirements, empty cones, failed payment, duplicate release and persisted ready-at timestamps.
-- Target rules cover ward access, unsupported targets and tool tiers.
-- Packaging contains only the two project DLLs and instructions, not third-party/game libraries.
+Release build treats warnings as errors. Pure netstandard2.0 logic is exercised by xUnit on .NET 8: trapezoid/radius/height, cap/order, prefab parsing and precedence, ward/tool-tier rules, configuration clamping, Elder modes, progressive durability/abort and aim/release gates.
 
-**Not yet tested inside Valheim.** A compile against reference assemblies verifies API signatures, not game behavior. No game client or Unity project was used in this pass.
+The game/Unity import audit reproduced the old four-argument Character.Message failure against supplied Valheim 1.0.2 DLLs. The rebuilt plugin passes. Package/version/release tests verify metadata consistency and safety guards; package builds fresh source and runs all gates. These results do **not** constitute gameplay verification.
 
-## Manual acceptance checklist (use a disposable world)
+## Pending in-game acceptance (disposable world)
 
-1. Install BepInExPack_Valheim, Jotunn 2.30.2 and this candidate on a compatible game build. Confirm the plugin's load log and no exceptions.
-2. Craft ten Axtral Runes at a workbench from 2 Resin + 1 Greydwarf Eye. Confirm stacking, saving/loading, translation, and no changes to vanilla Amber.
-3. With Woodcutting 10, casting must fail. At level 11 it must work. Test missing/broken axe and nine versus ten runes. Make sure the axe equipped is the highest eligible tier, not merely the currently held axe.
-4. Hold G. Check raised-axe pose, green targets, cone outline and target count. Turn left/right: the preview must track yaw. Place targets just inside/outside ±15° and 30 meters; test slopes/height.
-5. Release: ten runes disappear once; blue axe/wave travels outward; eligible trees fall once when reached. Check falling logs and resource drops. Trees above axe tier must remain intact.
-6. Try casting again before 45 seconds, at the boundary, and after a save/relog. Confirm cooldown UI and no extra cost on denial.
-7. Cancel via right mouse/Escape, open inventory/chat/menu, lose focus, change/remove/break the axe, die or teleport while aiming. No runes or cooldown should be spent; no lingering green highlights or raised pose.
-8. Cast at an empty cone; no cost. Check existing stumps, ClearStumps=false, and the fact that new stumps/logs are NOT swept up by the same cast. Ensure buildings, creatures, rocks and dropped items are untouched.
-9. Test a ward without access. No preview or damage. Test access being revoked between release and impact.
-10. Test death/teleport during the flight: stop effects/hits but keep the already-paid cost and cooldown. Test several casts for leaked renderers/materials and log errors.
-11. If using modded cave vines, identify the exact prefab name, configure VinePrefabs and test only that named destructible. Do not put doors/building pieces in the list.
-12. Host + second client + dedicated server: everyone installs the same version. Verify owner routing for a tree owned by another peer, synced configuration, rune save/load and version-mismatch rejection. Only the caster sees custom VFX in this version.
-
-Record the exact game, Unity, BepInExPack and Jotunn versions plus observed results before calling this a verified gameplay release. Send BepInEx/LogOutput.log after any failure (remove private identifiers first).
+1. Load on Valheim 1.0.2 with BepInExPack_Valheim and Jotunn 2.30.2; inspect logs. Remove old plugin copies. Confirm fresh `haragon.AxtralProjectionValheim.cfg` and no rune registration or recipe.
+2. Default Shift+G holds aim and releases cast without opening unintended vanilla UI. Test remapping/modifiers and independent gamepad binding. Gamepad defaults disabled. Verify chat, console, inventory, menus, generic text input and minimap pin editing suppress casting.
+3. At wood cutting 14, refuse casting; at 15 allow it with other gates satisfied. Highest-tier unbroken axe auto-equips; changed/broken/missing axe cancels appropriately.
+4. Elder Slotted requires GP_TheElder as chosen power; Active requires its active effect; None bypasses. Check clear failure messages and no Exhaustion/durability cost on denial.
+5. Preview is a trapezoid matching the yaw-only volume. Test a tree 1m ahead, a tree 2m ahead/2m sideways (inside at defaults), an outside tree farther sideways, trunk-edge intersection, behind-player trees, far-radius boundary and slopes. Check collider-radius approximation per prefab.
+6. Verify nearest-forward MaxTrees cap, exact inclusion/exclusion precedence, disabled/enabled stumps, modded AdditionalPrefabs and no damage to logs/buildings/creatures/dropped items.
+7. Nonempty cast applies native Axtral Exhaustion icon/timer for configured duration. It blocks recast; zero Cooldown disables it. Change settings and verify next cast updates TTL. No custom cooldown display remains. Relog persistence is not required; death clears it.
+8. Progressive 1% max durability per non-stump hit: breaking hit lands; farther trees remain untouched. Drop axe mid-flight; stop pending hits. No cost for stumps or zero percent; no XP at zero, optional skill gain when enabled.
+9. Cancel aiming, die/teleport/logout during flight and unload the scene: no pending hits, lingering highlights/pose or spectral axe. Attempt another cast after an immediate first-hit break to detect stuck flight state.
+10. Native immunity/tool tiers/wards still work, including access revoked between release and impact. Confirm resource drops and falling log behavior.
+11. Test on a vanilla server with only the client mod, and with mod/Jotunn on server and two clients for synced gameplay configuration and native owner routing. Other clients need not see custom VFX. These are trusted-client limits, not anti-cheat.
+12. Repeat casts and inspect sanitized logs for exceptions or leaked visuals. Record exact game/BepInExPack/Jotunn versions and real outcomes before publishing a release.
