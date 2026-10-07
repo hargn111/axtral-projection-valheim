@@ -26,6 +26,7 @@ public sealed class Plugin : BaseUnityPlugin
     private ConfigEntry<KeyCode> castKey = null!;
     private ConfigEntry<float> range = null!, angle = null!, cooldown = null!, skill = null!, speed = null!, startWidth = null!, durability = null!, xp = null!;
     private ConfigEntry<int> maxTrees = null!;
+    private ConfigEntry<ElderRequirement> elder = null!;
     private ConfigEntry<bool> stumps = null!;
     private ConfigEntry<string> additional = null!, excluded = null!;
     private Player? player;
@@ -59,6 +60,7 @@ public sealed class Plugin : BaseUnityPlugin
         xp = Synced("SkillXpPerTree", 0f, 0f, 1f, "Wood cutting skill gain per tree hit; 0 disables.");
         maxTrees = Config.Bind("Spell", "MaxTrees", 15, new ConfigDescription("Maximum trees per cast, nearest forward first.", new AcceptableValueRange<int>(2, 50), new ConfigurationManagerAttributes { IsAdminOnly = true }));
         excluded = Config.Bind("Spell", "ExcludedPrefabs", "", new ConfigDescription("Comma-separated exact prefab names to never fell. Exclusion wins.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        elder = Config.Bind("Spell", "ElderRequirement", ElderRequirement.Slotted, new ConfigDescription("None, Slotted (chosen Forsaken Power), or Active.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         harmony = new Harmony(Guid);
         harmony.PatchAll(typeof(Plugin).Assembly);
         Logger.LogInfo("Axtral Projection 0.1.0 loaded. Hold G to aim, release to cast.");
@@ -123,7 +125,11 @@ public sealed class Plugin : BaseUnityPlugin
     private void Release()
     {
         if (!player) { Cancel(); return; }
-        var p = player!; var origin = p.transform.position; var dir = Direction(p); var axe = BestAxe(p);
+        var p = player!; var origin = p.transform.position; var dir = Direction(p); var axe = aimAxe;
+        if (axe == null || p.GetCurrentWeapon() != axe || !p.GetInventory().ContainsItem(axe) || (axe.m_shared.m_useDurability && axe.m_durability <= 0))
+        { Cancel(); Show("Requires an equipped, unbroken woodcutting axe."); return; }
+        if (!ElderRules.Allowed(elder.Value, p.GetGuardianPowerName() == "GP_TheElder", p.GetSEMan().HaveStatusEffect("GP_TheElder".GetStableHashCode())))
+        { Cancel(); Show(elder.Value == ElderRequirement.Active ? "Requires the Elder's power to be active." : "Requires the Elder's power to be your Forsaken Power."); return; }
         float castRange = Range, castAngle = Angle, castSpeed = Speed, castWidth = StartWidth;
         var targets = Targets.Find(origin, dir, castRange, castAngle, axe?.m_shared.m_toolTier ?? -1, stumps.Value, additional.Value, excluded.Value, StartWidth, MaxTrees);
         var failure = gate.Release(Now, p.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, RequiredSkill, 0, Cooldown, targets.Count, _ => true);
