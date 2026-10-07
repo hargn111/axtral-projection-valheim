@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""Resolve all game/Unity method and field imports against supplied references."""
+from pathlib import Path
+import argparse
+import subprocess
+
+root = Path(__file__).resolve().parents[1]
+parser = argparse.ArgumentParser()
+parser.add_argument("dll", nargs="?", default=str(root / "src/AxtralProjection/bin/Release/net48/AxtralProjection.dll"))
+parser.add_argument("--references", type=Path, default=root / "references")
+args = parser.parse_args()
+subprocess.run(["dotnet", "run", "--project", str(root / "tools/ImportAudit"), "-c", "Release", "--", args.dll, str(args.references)], check=True)

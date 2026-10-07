@@ -1,15 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup><TargetFramework>net48</TargetFramework><AssemblyName>AxtralProjection</AssemblyName><Version>0.1.0</Version><CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies></PropertyGroup>
+<PropertyGroup><TargetFramework>net48</TargetFramework><AssemblyName>AxtralProjection</AssemblyName><Version>0.1.0</Version><CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies><GameReferences Condition="'$(GameReferences)' == ''">$(MSBuildThisFileDirectory)../../references</GameReferences></PropertyGroup>
 <ItemGroup>
 <ProjectReference Include="../AxtralProjection.Core/AxtralProjection.Core.csproj"/>
 <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all"/>
-<PackageReference Include="ValheimGameLibs" Version="0.221.4" GeneratePathProperty="true" ExcludeAssets="all" PrivateAssets="all"/>
-<PackageReference Include="UnityEngine.Modules" Version="2021.3.33" PrivateAssets="all"/>
 <PackageReference Include="JotunnLib" Version="2.30.2" ExcludeAssets="build;buildTransitive;runtime" PrivateAssets="all"/>
-<Reference Include="assembly_valheim"><HintPath>$(PkgValheimGameLibs)/lib/assembly_valheim.dll</HintPath><Private>false</Private></Reference>
-<Reference Include="assembly_utils"><HintPath>$(PkgValheimGameLibs)/lib/assembly_utils.dll</HintPath><Private>false</Private></Reference>
+<Reference Include="$(GameReferences)/*.dll"><Private>false</Private></Reference>
 <Reference Include="BepInEx"><HintPath>../../.deps/BepInEx.dll</HintPath><Private>false</Private></Reference>
 <Reference Include="0Harmony"><HintPath>../../.deps/0Harmony.dll</HintPath><Private>false</Private></Reference>
 </ItemGroup>
-<Target Name="CheckReferences" BeforeTargets="ResolveAssemblyReferences"><Error Condition="!Exists('../../.deps/BepInEx.dll')" Text="Run python3 scripts/prepare-references.py before building."/></Target>
+<Target Name="CheckReferences" BeforeTargets="ResolveAssemblyReferences"><Error Condition="!Exists('../../.deps/BepInEx.dll')" Text="Run python3 scripts/prepare-references.py before building."/><Error Condition="!Exists('$(GameReferences)/assembly_valheim.dll')" Text="Supply Valheim 1.0.2 Managed DLLs in references/ or set GameReferences."/></Target>
 </Project>

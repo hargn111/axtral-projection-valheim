@@ -47,6 +47,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void Awake()
     {
         instance = this;
+        GameCompat.Log = Logger;
         castKey = Config.Bind("Controls", "CastKey", KeyCode.G, "Hold to aim; release to cast. Right mouse or Escape cancels.");
         range = Synced("Range", 30f, 1f, 100f, "Maximum range in meters.");
         angle = Synced("ConeAngle", 30f, 1f, 180f, "Full cone width in degrees, not half-angle.");
@@ -184,7 +185,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (posedForearm) posedForearm!.localRotation = originalForearm;
         posedArm = null; posedForearm = null;
     }
-    private void Show(string message) { feedback = message; feedbackUntil = Time.unscaledTime + 3; if (player) player!.Message(MessageHud.MessageType.Center, message); }
+    private void Show(string message) { feedback = message; feedbackUntil = Time.unscaledTime + 3; if (player) GameCompat.Message(player!, MessageHud.MessageType.Center, message); }
     private void ShowFailure(CastFailure failure)
     {
         switch (failure)
