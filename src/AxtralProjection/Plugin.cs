@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using AxtralProjection.Core;
 using BepInEx;
@@ -20,7 +19,6 @@ namespace AxtralProjection;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "haragon.AxtralProjectionValheim";
-    private const string CooldownKey = Guid + ".readyAt";
     private static Plugin? instance;
     private Harmony harmony = null!;
     private const string CastButton = "AxtralProjectionCast";
@@ -39,11 +37,10 @@ public sealed class Plugin : BaseUnityPlugin
     private float nextPreview;
     private Coroutine? flight;
     private GameObject? axeVisual;
-    private string feedback = "";
-    private float feedbackUntil;
+    private Exhaustion exhaustion = null!;
     private Transform? posedArm, posedForearm;
     private Quaternion originalArm, originalForearm;
-    private static double Now => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+    private bool IsExhausted(Player p) => p.GetSEMan().HaveStatusEffect(Exhaustion.Hash);
 
     private void Awake()
     {
@@ -67,6 +64,7 @@ public sealed class Plugin : BaseUnityPlugin
         maxTrees = Config.Bind("Spell", "MaxTrees", 15, new ConfigDescription("Maximum trees per cast, nearest forward first.", new AcceptableValueRange<int>(2, 50), new ConfigurationManagerAttributes { IsAdminOnly = true }));
         excluded = Config.Bind("Spell", "ExcludedPrefabs", "", new ConfigDescription("Comma-separated exact prefab names to never fell. Exclusion wins.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         elder = Config.Bind("Spell", "ElderRequirement", ElderRequirement.Slotted, new ConfigDescription("None, Slotted (chosen Forsaken Power), or Active.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        exhaustion = new Exhaustion();
         harmony = new Harmony(Guid);
         harmony.PatchAll(typeof(Plugin).Assembly);
         Logger.LogInfo("Axtral Projection 0.1.0 loaded. Hold the configured shortcut to aim; release to cast.");
@@ -100,9 +98,7 @@ public sealed class Plugin : BaseUnityPlugin
         if (current != player)
         {
             Cancel(); StopFlight(); player = current;
-            double ready = 0;
-            if (player && player.m_customData.TryGetValue(CooldownKey, out var saved)) double.TryParse(saved, NumberStyles.Float, CultureInfo.InvariantCulture, out ready);
-            gate = new CastGate(ready);
+            gate = new CastGate();
         }
         if (!player) return; // Dedicated server registers content/config but does not cast.
         if (InputBlocked() || Unsafe(player)) { Cancel(); if (player.IsDead() || player.IsTeleporting()) StopFlight(); return; }
@@ -122,7 +118,7 @@ public sealed class Plugin : BaseUnityPlugin
         else if (ZInput.GetButtonDown(CastButton) && flight == null)
         {
             var axe = BestAxe(player);
-            var failure = gate.Begin(Now, player.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, RequiredSkill, 0);
+            var failure = gate.Begin(player.GetSkillLevel(Skills.SkillType.WoodCutting), axe != null, RequiredSkill, IsExhausted(player));
             if (failure != CastFailure.None) { ShowFailure(failure); return; }
             if (axe == null || (player.GetCurrentWeapon() != axe && !player.EquipItem(axe))) { Cancel(); Show("Unable to equip axe."); return; }
             aimAxe = axe; nextPreview = 0;
@@ -138,10 +134,10 @@ public sealed class Plugin : BaseUnityPlugin
         { Cancel(); Show(elder.Value == ElderRequirement.Active ? "Requires the Elder's power to be active." : "Requires the Elder's power to be your Forsaken Power."); return; }
         float castRange = Range, castAngle = Angle, castSpeed = Speed, castWidth = StartWidth;
         var targets = Targets.Find(origin, dir, castRange, castAngle, axe?.m_shared.m_toolTier ?? -1, stumps.Value, additional.Value, excluded.Value, StartWidth, MaxTrees);
-        var failure = gate.Release(Now, p.GetSkillLevel(Skills.SkillType.WoodCutting), 0, axe?.m_shared.m_toolTier, RequiredSkill, 0, Cooldown, targets.Count, _ => true);
+        var failure = gate.Release(p.GetSkillLevel(Skills.SkillType.WoodCutting), axe != null, RequiredSkill, IsExhausted(p), targets.Count);
         effects.Clear(); preview.Clear(); aimAxe = null;
         if (failure != CastFailure.None) { ShowFailure(failure); return; }
-        p.m_customData[CooldownKey] = gate.ReadyAt.ToString("R", CultureInfo.InvariantCulture);
+        if (!exhaustion.Apply(p, Cooldown)) { Show("Unable to apply Axtral Exhaustion; spell cancelled."); return; }
         // Set cooldown before any effect or world operation. A thrown visual error cannot permit a free repeat.
         flight = StartCoroutine(Launch(p, origin, dir, axe!, targets, castRange, castAngle, castSpeed, castWidth, DurabilityPercent, SkillXp));
         Show("Axtral Projection cast!");
@@ -199,12 +195,12 @@ public sealed class Plugin : BaseUnityPlugin
         if (posedForearm) posedForearm!.localRotation = originalForearm;
         posedArm = null; posedForearm = null;
     }
-    private void Show(string message) { feedback = message; feedbackUntil = Time.unscaledTime + 3; if (player) GameCompat.Message(player!, MessageHud.MessageType.Center, message); }
+    private void Show(string message) { if (player) GameCompat.Message(player!, MessageHud.MessageType.Center, message); }
     private void ShowFailure(CastFailure failure)
     {
         switch (failure)
         {
-            case CastFailure.Cooldown: Show($"Axtral Projection: {Math.Ceiling(gate.ReadyAt - Now)}s cooldown."); break;
+            case CastFailure.Cooldown: Show($"Axtral Projection: {Math.Ceiling(player ? player!.GetSEMan().GetStatusEffect(Exhaustion.Hash)?.GetRemaningTime() ?? 0 : 0)}s cooldown."); break;
             case CastFailure.Skill: Show($"Requires Woodcutting level {RequiredSkill}."); break;
             case CastFailure.Axe: Show("Requires an unbroken woodcutting axe in inventory."); break;
             case CastFailure.NoTargets: Show("No eligible trees or stumps in the targeting volume."); break;
@@ -213,9 +209,8 @@ public sealed class Plugin : BaseUnityPlugin
     }
     private void OnGUI()
     {
-        if (!player || InputBlocked()) return;
-        string text = gate.Aiming ? $"Axtral Projection — {preview.Count} targets\nRelease {castKey.Value} to cast · Right mouse to cancel" : Now < gate.ReadyAt ? $"Axtral Projection · {Math.Ceiling(gate.ReadyAt - Now)}s" : Time.unscaledTime < feedbackUntil ? feedback : "";
-        if (text.Length > 0) GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height * 0.72f, 440, 55), text);
+        if (!player || InputBlocked() || !gate.Aiming) return;
+        GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height * 0.72f, 440, 55), $"Axtral Projection — {preview.Count} targets\nRelease {castKey.Value} to cast · Right mouse to cancel");
     }
     private void ControlsChanged(object sender, EventArgs e) { Cancel(); }
     private void OnDisable() { Cancel(); StopFlight(); }

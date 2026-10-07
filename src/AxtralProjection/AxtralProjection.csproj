@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 <PropertyGroup><TargetFramework>net48</TargetFramework><AssemblyName>AxtralProjection</AssemblyName><Version>0.1.0</Version><CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies><GameReferences Condition="'$(GameReferences)' == ''">$(MSBuildThisFileDirectory)../../references</GameReferences></PropertyGroup>
 <ItemGroup>
+<EmbeddedResource Include="exhaustion_icon.png" LogicalName="AxtralProjection.exhaustion_icon.png"/>
 <ProjectReference Include="../AxtralProjection.Core/AxtralProjection.Core.csproj"/>
 <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all"/>
 <PackageReference Include="JotunnLib" Version="2.30.2" ExcludeAssets="build;buildTransitive;runtime" PrivateAssets="all"/>
