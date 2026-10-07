@@ -20,10 +20,24 @@ internal sealed class PreviewEffects
         var right = new Vector3(forward.z, 0, -forward.x);
         var start = origin + Vector3.up * 0.2f;
         float nearHalf = width / 2, farHalf = nearHalf + range * Mathf.Tan(angle * Mathf.Deg2Rad / 2);
-        cone!.positionCount = 5;
-        cone.SetPositions(new[] { start - right * nearHalf, start + right * nearHalf,
-            start + forward * range + right * farHalf, start + forward * range - right * farHalf,
-            start - right * nearHalf });
+        var corners = new[] { start - right * nearHalf, start + right * nearHalf,
+            start + forward * range + right * farHalf, start + forward * range - right * farHalf };
+        // Same X/Z boundary as eligibility; sample terrain so slopes do not visually shift the box.
+        var outline = new List<Vector3>();
+        for (int edge = 0; edge < corners.Length; edge++)
+        {
+            var from = corners[edge]; var to = corners[(edge + 1) % corners.Length];
+            int steps = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(from, to)));
+            for (int i = 0; i < steps; i++)
+            {
+                var point = Vector3.Lerp(from, to, (float)i / steps);
+                if (Heightmap.GetHeight(point, out float ground)) point.y = ground + 0.2f;
+                outline.Add(point);
+            }
+        }
+        outline.Add(outline[0]);
+        cone!.positionCount = outline.Count;
+        cone.SetPositions(outline.ToArray());
     }
     public void Clear()
     {

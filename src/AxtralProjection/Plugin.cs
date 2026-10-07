@@ -18,11 +18,12 @@ namespace AxtralProjection;
 [NetworkCompatibility(CompatibilityLevel.VersionCheckOnly, VersionStrictness.None)]
 public sealed class Plugin : BaseUnityPlugin
 {
-    public const string Version = "0.2.0";
+    public const string Version = "0.2.1";
     public const string Guid = "haragon.AxtralProjectionValheim";
     private static Plugin? instance;
     private Harmony harmony = null!;
-    private string castButton = "", gamepadButton = "";
+    private string gamepadButton = "";
+    private bool controllerAim;
     private ConfigEntry<KeyboardShortcut> castKey = null!;
     private ConfigEntry<InputManager.GamepadButton> gamepad = null!;
     private ConfigEntry<float> range = null!, angle = null!, cooldown = null!, skill = null!, speed = null!, startWidth = null!, durability = null!, xp = null!;
@@ -48,30 +49,28 @@ public sealed class Plugin : BaseUnityPlugin
     {
         instance = this;
         GameCompat.Log = Logger;
-        castKey = Config.Bind("Controls", "CastKey", new KeyboardShortcut(KeyCode.G, KeyCode.LeftShift), "Hold to aim; release to cast. Right mouse or Escape cancels.");
+        castKey = Config.Bind("Controls", "CastKey", new KeyboardShortcut(KeyCode.G), "Hold to aim; release to cast. Right mouse or Escape cancels.");
         gamepad = Config.Bind("Controls", "GamepadButton", InputManager.GamepadButton.None, "Optional gamepad cast binding; None disables it to avoid vanilla conflicts.");
-        // Jotunn appends !GUID to Name. Use the registered names, not the bare labels.
-        // Separate gamepad input so Jotunn does not require keyboard modifiers for it.
-        var keyboardButton = new ButtonConfig { Name = "AxtralProjectionCast", ShortcutConfig = castKey, ActiveInGUI = false, ActiveInCustomGUI = false };
+        // Read raw keyboard state: KeyboardShortcut/ZInput rejects unrelated held keys.
+        // Keep controller input independent, using Jotunn's registered name.
         var controllerButton = new ButtonConfig { Name = "AxtralProjectionGamepad", GamepadConfig = gamepad, ActiveInGUI = false, ActiveInCustomGUI = false };
-        InputManager.Instance.AddButton(Guid, keyboardButton);
         InputManager.Instance.AddButton(Guid, controllerButton);
-        castButton = keyboardButton.Name; gamepadButton = controllerButton.Name;
+        gamepadButton = controllerButton.Name;
         castKey.SettingChanged += ControlsChanged;
         gamepad.SettingChanged += ControlsChanged;
-        range = Synced("Range", 20f, 10f, 50f, "Maximum range in meters.");
-        angle = Synced("ConeAngle", 30f, 20f, 45f, "Full cone width in degrees, not half-angle.");
+        range = Synced("Range", 15f, 10f, 50f, "Maximum range in meters.");
+        angle = Synced("ConeAngle", 30f, 0f, 45f, "Full cone width in degrees, not half-angle.");
         cooldown = Synced("Cooldown", 180f, 0f, 600f, "Cooldown in seconds after a successful cast.");
         skill = Synced("WoodCuttingLevel", 15f, 0f, 100f, "Required wood cutting skill level.");
         speed = Synced("TravelSpeed", 10f, 1f, 50f, "Astral wave travel speed in meters per second.");
         stumps = Config.Bind("Spell", "ClearStumps", false, new ConfigDescription("Include existing tree stumps. Newly spawned stumps are left for a later cast.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         additional = Config.Bind("Spell", "AdditionalPrefabs", "", new ConfigDescription("Comma-separated exact Destructible prefab names from other mods.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
-        startWidth = Synced("StartWidth", 3f, 0f, 10f, "Full starting width in meters.");
-        durability = Synced("DurabilityCostPercent", 1f, 0f, 25f, "Percent of axe max durability per tree hit; 0 disables.");
+        startWidth = Synced("StartWidth", 1f, 0f, 3f, "Full starting width in meters.");
+        durability = Synced("DurabilityCostPercent", 2f, 0f, 25f, "Percent of axe max durability per tree hit; 0 disables.");
         xp = Synced("SkillXpPerTree", 0f, 0f, 1f, "Wood cutting skill gain per tree hit; 0 disables.");
-        maxTrees = Config.Bind("Spell", "MaxTrees", 15, new ConfigDescription("Maximum trees per cast, nearest forward first.", new AcceptableValueRange<int>(2, 50), new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        maxTrees = Config.Bind("Spell", "MaxTrees", 15, new ConfigDescription("Maximum counted targets per cast, nearest forward first. Birch_Sapling does not consume a slot.", new AcceptableValueRange<int>(2, 50), new ConfigurationManagerAttributes { IsAdminOnly = true }));
         excluded = Config.Bind("Spell", "ExcludedPrefabs", "", new ConfigDescription("Comma-separated exact prefab names to never fell. Exclusion wins.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
-        elder = Config.Bind("Spell", "ElderRequirement", ElderRequirement.Slotted, new ConfigDescription("None, Slotted (chosen Forsaken Power), or Active.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        elder = Config.Bind("Spell", "ElderRequirement", ElderRequirement.Active, new ConfigDescription("None, Slotted (chosen Forsaken Power), or Active.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         exhaustion = new Exhaustion();
         harmony = new Harmony(Guid);
         harmony.PatchAll(typeof(Plugin).Assembly);
@@ -79,13 +78,13 @@ public sealed class Plugin : BaseUnityPlugin
         Logger.LogInfo($"Axtral Projection {Version} loaded. Hold the configured shortcut to aim; release to cast.");
     }
     private ConfigEntry<float> Synced(string name, float value, float min, float max, string description) => Config.Bind("Spell", name, value, new ConfigDescription(description, new AcceptableValueRange<float>(min, max), new ConfigurationManagerAttributes { IsAdminOnly = true }));
-    private float Range => ConfigBounds.Clamp(range.Value, 10, 50, 20);
-    private float Angle => ConfigBounds.Clamp(angle.Value, 20, 45, 30);
+    private float Range => ConfigBounds.Clamp(range.Value, 10, 50, 15);
+    private float Angle => ConfigBounds.Clamp(angle.Value, 0, 45, 30);
     private float Cooldown => ConfigBounds.Clamp(cooldown.Value, 0, 600, 180);
     private float RequiredSkill => ConfigBounds.Clamp(skill.Value, 0, 100, 15);
     private float Speed => ConfigBounds.Clamp(speed.Value, 1, 50, 10);
-    private float StartWidth => ConfigBounds.Clamp(startWidth.Value, 0, 10, 3);
-    private float DurabilityPercent => ConfigBounds.Clamp(durability.Value, 0, 25, 1);
+    private float StartWidth => ConfigBounds.Clamp(startWidth.Value, 0, 3, 1);
+    private float DurabilityPercent => ConfigBounds.Clamp(durability.Value, 0, 25, 2);
     private float SkillXp => ConfigBounds.Clamp(xp.Value, 0, 1, 0);
     private int MaxTrees => ConfigBounds.Clamp(maxTrees.Value, 2, 50);
     private static bool InputBlocked() => UnityEngine.Application.isFocused == false || Time.timeScale == 0 || global::Console.IsVisible() || InventoryGui.IsVisible() || Menu.IsVisible() || TextInput.IsVisible() || (Chat.instance && Chat.instance.HasFocus()) || (Minimap.instance && Minimap.InTextInput());
@@ -96,6 +95,12 @@ public sealed class Plugin : BaseUnityPlugin
         var dir = p.GetLookDir(); dir.y = 0;
         if (dir.sqrMagnitude <= 0.001f) { dir = p.transform.forward; dir.y = 0; }
         return dir.normalized;
+    }
+    private bool HasElder(Player p) => ElderRules.Allowed(elder.Value, p.GetGuardianPowerName() == "GP_TheElder", p.GetSEMan().HaveStatusEffect("GP_TheElder".GetStableHashCode()));
+    private bool KeyboardDown()
+    {
+        var shortcut = castKey.Value;
+        return shortcut.MainKey != KeyCode.None && AimInput.CanBegin(UnityInput.Current.GetKeyDown(shortcut.MainKey), shortcut.Modifiers.Select(UnityInput.Current.GetKey));
     }
     private void Update()
     {
@@ -112,12 +117,14 @@ public sealed class Plugin : BaseUnityPlugin
         }
         if (!player) return; // Dedicated server registers content/config but does not cast.
         if (InputBlocked() || Unsafe(player)) { Cancel(); if (player.IsDead() || player.IsTeleporting()) StopFlight(); return; }
+        bool keyboardDown = KeyboardDown();
+        bool controllerDown = gamepad.Value != InputManager.GamepadButton.None && ZInput.GetButtonDown(gamepadButton);
         if (gate.Aiming)
         {
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetMouseButtonDown(1)) { Cancel(); return; }
             if (player.GetCurrentWeapon() != aimAxe || BestAxe(player) != aimAxe) { Cancel(); Show("Axe changed: spell cancelled."); return; }
-            // GetKey rather than GetKeyUp also handles a remapped key or a lost release event.
-            if (!(ZInput.GetButton(castButton) || ZInput.GetButton(gamepadButton))) { Release(); return; }
+            // Only the initiating main key/button releases aim; movement/modifier changes cannot cast.
+            if (!AimInput.Held(controllerAim, UnityInput.Current.GetKey(castKey.Value.MainKey), ZInput.GetButton(gamepadButton))) { Release(); return; }
             if (Time.unscaledTime >= nextPreview)
             {
                 preview = Targets.Find(player.transform.position, Direction(player), Range, Angle, aimAxe!.m_shared.m_toolTier, stumps.Value, additional.Value, excluded.Value, StartWidth, MaxTrees);
@@ -125,13 +132,13 @@ public sealed class Plugin : BaseUnityPlugin
                 nextPreview = Time.unscaledTime + 0.1f;
             }
         }
-        else if ((ZInput.GetButtonDown(castButton) || ZInput.GetButtonDown(gamepadButton)) && !casting)
+        else if ((keyboardDown || controllerDown) && !casting)
         {
             var axe = BestAxe(player);
-            var failure = gate.Begin(player.GetSkillLevel(Skills.SkillType.WoodCutting), axe != null, RequiredSkill, IsExhausted(player));
+            var failure = gate.Begin(player.GetSkillLevel(Skills.SkillType.WoodCutting), axe != null, RequiredSkill, IsExhausted(player), HasElder(player));
             if (failure != CastFailure.None) { ShowFailure(failure); return; }
             if (axe == null || (player.GetCurrentWeapon() != axe && !player.EquipItem(axe))) { Cancel(); Show("Unable to equip axe."); return; }
-            aimAxe = axe; nextPreview = 0;
+            aimAxe = axe; controllerAim = !keyboardDown && controllerDown; nextPreview = 0;
         }
     }
     private void Release()
@@ -140,11 +147,10 @@ public sealed class Plugin : BaseUnityPlugin
         var p = player!; var origin = p.transform.position; var dir = Direction(p); var axe = aimAxe;
         if (axe == null || p.GetCurrentWeapon() != axe || !p.GetInventory().ContainsItem(axe) || (axe.m_shared.m_useDurability && axe.m_durability <= 0))
         { Cancel(); Show("Requires an equipped, unbroken woodcutting axe."); return; }
-        if (!ElderRules.Allowed(elder.Value, p.GetGuardianPowerName() == "GP_TheElder", p.GetSEMan().HaveStatusEffect("GP_TheElder".GetStableHashCode())))
-        { Cancel(); Show(elder.Value == ElderRequirement.Active ? "Requires the Elder's power to be active." : "Requires the Elder's power to be your Forsaken Power."); return; }
+        if (!HasElder(p)) { Cancel(); ShowFailure(CastFailure.Elder); return; }
         float castRange = Range, castAngle = Angle, castSpeed = Speed, castWidth = StartWidth;
         var targets = Targets.Find(origin, dir, castRange, castAngle, axe?.m_shared.m_toolTier ?? -1, stumps.Value, additional.Value, excluded.Value, StartWidth, MaxTrees);
-        var failure = gate.Release(p.GetSkillLevel(Skills.SkillType.WoodCutting), axe != null, RequiredSkill, IsExhausted(p), targets.Count);
+        var failure = gate.Release(p.GetSkillLevel(Skills.SkillType.WoodCutting), axe != null, RequiredSkill, IsExhausted(p), targets.Count, HasElder(p));
         effects.Clear(); preview.Clear(); aimAxe = null;
         if (failure != CastFailure.None) { ShowFailure(failure); return; }
         if (!exhaustion.Apply(p, Cooldown)) { Show("Unable to apply Axtral Exhaustion; spell cancelled."); return; }
@@ -216,6 +222,7 @@ public sealed class Plugin : BaseUnityPlugin
             case CastFailure.Cooldown: Show($"Axtral Projection: {Math.Ceiling(player ? player!.GetSEMan().GetStatusEffect(Exhaustion.Hash)?.GetRemaningTime() ?? 0 : 0)}s cooldown."); break;
             case CastFailure.Skill: Show($"Requires Woodcutting level {RequiredSkill}."); break;
             case CastFailure.Axe: Show("Requires an unbroken woodcutting axe in inventory."); break;
+            case CastFailure.Elder: Show(elder.Value == ElderRequirement.Active ? "Requires the Elder's power to be active." : "Requires the Elder's power to be your Forsaken Power."); break;
             case CastFailure.NoTargets: Show("No eligible trees or stumps in the targeting volume."); break;
             default: Show("Spell cancelled."); break;
         }
@@ -223,7 +230,7 @@ public sealed class Plugin : BaseUnityPlugin
     private void OnGUI()
     {
         if (!player || InputBlocked() || !gate.Aiming) return;
-        GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height * 0.72f, 440, 55), $"Axtral Projection — {preview.Count} targets\nRelease {castKey.Value} to cast · Right mouse to cancel");
+        GUI.Box(new Rect(Screen.width / 2f - 220, Screen.height * 0.72f, 440, 55), $"Axtral Projection — {preview.Count} targets\nRelease {(controllerAim ? gamepad.Value.ToString() : castKey.Value.MainKey.ToString())} to cast · Right mouse to cancel");
     }
     private void ControlsChanged(object sender, EventArgs e) { Cancel(); }
     private void SceneUnloaded(UnityEngine.SceneManagement.Scene scene) { Cancel(); StopFlight(); }

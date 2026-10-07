@@ -18,23 +18,29 @@ class VersionTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        self.expected_version = version.project_version(ROOT)
         for path in ["src/AxtralProjection/AxtralProjection.csproj", "src/AxtralProjection/Plugin.cs", "package/manifest.json", "package/icon.png", "CHANGELOG.md"]:
             target = self.root / path
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / path, target)
+        # Stable notes fixture: release prose and version bumps must not invalidate these tests.
+        (self.root / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [{self.expected_version}]\n\n### Added\n- Current fixture sentinel.\n\n"
+            "## [0.0.1]\n\n- Older fixture sentinel.\n"
+        )
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def test_matching_versions_pass(self):
-        self.assertEqual(version.validate(self.root), "0.2.0")
+        self.assertEqual(version.validate(self.root), self.expected_version)
 
     def test_each_version_mismatch_fails(self):
         for name in ["src/AxtralProjection/Plugin.cs", "package/manifest.json", "CHANGELOG.md"]:
             with self.subTest(name=name):
                 path = self.root / name
                 original = path.read_text()
-                path.write_text(original.replace("0.2.0", "0.9.0"))
+                path.write_text(original.replace(self.expected_version, "999.0.0"))
                 with self.assertRaises(ValueError):
                     version.validate(self.root)
                 path.write_text(original)
@@ -59,8 +65,8 @@ class VersionTests(unittest.TestCase):
 
     def test_notes_extract_only_current_section(self):
         text = version.notes(self.root)
-        self.assertIn("Exhaustion", text)
-        self.assertNotIn("Initial compiled", text)
+        self.assertIn("Current fixture sentinel", text)
+        self.assertNotIn("Older fixture sentinel", text)
 
 
 class ReleaseTests(unittest.TestCase):

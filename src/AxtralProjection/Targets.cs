@@ -12,11 +12,11 @@ internal sealed class Target
     public Collider Collider { get; }
     public int MinimumTier { get; }
     public bool IsStump { get; }
-    public float Radius { get; }
+    public bool CountsTowardLimit => !TargetSelection.IsUncappedSapling(Object.gameObject.name);
     public float ForwardDistance(Vector3 origin, Vector3 forward) => Mathf.Max(0, Vector3.Dot(Position - origin, forward));
     public Vector3 Position => Object.transform.position;
-    public Target(Component obj, IDestructible damageable, Collider collider, int tier, bool stump, float radius)
-    { Object = obj; Damageable = damageable; Collider = collider; MinimumTier = tier; IsStump = stump; Radius = radius; }
+    public Target(Component obj, IDestructible damageable, Collider collider, int tier, bool stump)
+    { Object = obj; Damageable = damageable; Collider = collider; MinimumTier = tier; IsStump = stump; }
 }
 internal static class Targets
 {
@@ -49,23 +49,22 @@ internal static class Targets
                 .Where(c => !c.isTrigger && c.bounds.min.y <= basePosition.y + 1.5f && c.bounds.max.y >= basePosition.y - 0.5f)
                 .OrderBy(c => (new Vector2(c.bounds.center.x - basePosition.x, c.bounds.center.z - basePosition.z)).sqrMagnitude)
                 .FirstOrDefault() ?? collider;
-            float radius = Mathf.Max(trunkCollider.bounds.extents.x, trunkCollider.bounds.extents.z);
             var nview = component.GetComponent<ZNetView>();
             if (!nview || !nview.IsValid()) continue;
             var delta = component.transform.position - origin;
-            if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, radius, range, width, angle)) continue;
+            if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, range, width, angle)) continue;
             if (!TargetRules.Eligible(true, PrivateArea.CheckAccess(component.transform.position, 0, false), minTier, tier)) continue;
-            result.Add(new Target(component, destructible, trunkCollider, minTier, isStump, radius));
+            result.Add(new Target(component, destructible, trunkCollider, minTier, isStump));
         }
-        return TargetSelection.Nearest(result, t => t.ForwardDistance(origin, forward), maxTrees);
+        return TargetSelection.Nearest(result, t => t.ForwardDistance(origin, forward), maxTrees, t => t.CountsTowardLimit);
     }
     public static bool Hit(Target target, Player player, Vector3 origin, Vector3 forward, int tier, float range, float angle, float width)
     {
         if (!target.Object || !player || player.IsDead() || !target.Collider) return false;
         var view = target.Object.GetComponent<ZNetView>();
         if (!view || !view.IsValid() || !PrivateArea.CheckAccess(target.Position, 0, false)) return false;
-        var delta = target.Position - origin; float radius = target.Radius;
-        if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, radius, range, width, angle) || tier < target.MinimumTier) return false;
+        var delta = target.Position - origin;
+        if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, range, width, angle) || tier < target.MinimumTier) return false;
         var hit = new HitData { m_toolTier = (short)Math.Min(tier, short.MaxValue), m_point = target.Collider.ClosestPoint(target.Position + Vector3.up), m_dir = forward, m_pushForce = 0 };
         hit.m_damage.m_chop = 1000000f;
         hit.SetAttacker(player);
