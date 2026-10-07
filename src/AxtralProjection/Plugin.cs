@@ -137,24 +137,34 @@ public sealed class Plugin : BaseUnityPlugin
         if (failure != CastFailure.None) { ShowFailure(failure); return; }
         p.m_customData[CooldownKey] = gate.ReadyAt.ToString("R", CultureInfo.InvariantCulture);
         // Set cooldown before any effect or world operation. A thrown visual error cannot permit a free repeat.
-        flight = StartCoroutine(Launch(p, origin, dir, axe!.m_shared.m_toolTier, targets, castRange, castAngle, castSpeed, castWidth));
+        flight = StartCoroutine(Launch(p, origin, dir, axe!, targets, castRange, castAngle, castSpeed, castWidth, DurabilityPercent, SkillXp));
         Show("Axtral Projection cast!");
     }
-    private IEnumerator Launch(Player p, Vector3 origin, Vector3 dir, int tier, List<Target> targets, float castRange, float castAngle, float castSpeed, float castWidth)
+    private IEnumerator Launch(Player p, Vector3 origin, Vector3 dir, ItemDrop.ItemData axe, List<Target> targets, float castRange, float castAngle, float castSpeed, float castWidth, float costPercent, float xpPerTree)
     {
         try
         {
-            axeVisual = SpellEffects.CreateAxe(); float traveled = 0; int index = 0;
+            axeVisual = SpellEffects.CreateAxe(); float traveled = 0; int index = 0; int tier = axe.m_shared.m_toolTier;
             while (traveled <= castRange)
             {
                 if (!p || p != Player.m_localPlayer || p.IsDead() || p.IsTeleporting()) yield break;
+                if (!DurabilityRules.CanHit(p.GetInventory().ContainsItem(axe), axe.m_shared.m_useDurability, axe.m_durability)) yield break;
                 SpellEffects.MoveAxe(axeVisual, origin + Vector3.up * 1.5f + dir * traveled, dir, traveled, castAngle);
                 while (index < targets.Count && (!targets[index].Object || targets[index].ForwardDistance(origin, dir) <= traveled))
                 {
                     var target = targets[index++];
                     if (!target.Object) continue;
-                    try { Targets.Hit(target, p, origin, dir, tier, castRange, castAngle, castWidth); }
+                    if (!DurabilityRules.CanHit(p.GetInventory().ContainsItem(axe), axe.m_shared.m_useDurability, axe.m_durability)) yield break;
+                    bool hit = false;
+                    try { hit = Targets.Hit(target, p, origin, dir, tier, castRange, castAngle, castWidth); }
                     catch (Exception e) { Logger.LogWarning("Could not hit target: " + e.Message); }
+                    if (!hit || target.IsStump) continue;
+                    if (costPercent > 0 && axe.m_shared.m_useDurability)
+                        axe.m_durability = DurabilityRules.AfterHit(axe.m_durability, axe.GetMaxDurability(), costPercent, true, false);
+                    try { GameCompat.RaiseWoodCutting(p, xpPerTree); }
+                    catch (Exception e) { Logger.LogWarning("Wood cutting XP failed: " + e.Message); }
+                    if (axe.m_shared.m_useDurability && axe.m_durability <= 0)
+                    { Show("Your axe broke; Axtral Projection stopped."); yield break; }
                 }
                 if (traveled >= castRange) break;
                 yield return null;

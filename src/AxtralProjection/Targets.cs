@@ -54,17 +54,18 @@ internal static class Targets
         }
         return TargetSelection.Nearest(result, t => t.ForwardDistance(origin, forward), maxTrees);
     }
-    public static void Hit(Target target, Player player, Vector3 origin, Vector3 forward, int tier, float range, float angle, float width)
+    public static bool Hit(Target target, Player player, Vector3 origin, Vector3 forward, int tier, float range, float angle, float width)
     {
-        if (!target.Object || !player || player.IsDead() || !target.Collider) return;
+        if (!target.Object || !player || player.IsDead() || !target.Collider) return false;
         var view = target.Object.GetComponent<ZNetView>();
-        if (!view || !view.IsValid() || !PrivateArea.CheckAccess(target.Position, 0, false)) return;
+        if (!view || !view.IsValid() || !PrivateArea.CheckAccess(target.Position, 0, false)) return false;
         var delta = target.Position - origin; float radius = target.Radius;
-        if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, radius, range, width, angle) || tier < target.MinimumTier) return;
+        if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, radius, range, width, angle) || tier < target.MinimumTier) return false;
         var hit = new HitData { m_toolTier = (short)Math.Min(tier, short.MaxValue), m_point = target.Collider.ClosestPoint(target.Position + Vector3.up), m_dir = forward, m_pushForce = 0 };
         hit.m_damage.m_chop = 1000000f;
         hit.SetAttacker(player);
         // Vanilla Damage routes the hit to the ZNetView owner and preserves falling logs/drops.
         target.Damageable.Damage(hit);
+        return true;
     }
 }
