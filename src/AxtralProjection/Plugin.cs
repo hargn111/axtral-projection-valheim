@@ -148,22 +148,24 @@ public sealed class Plugin : BaseUnityPlugin
         if (failure != CastFailure.None) { ShowFailure(failure); return; }
         if (!exhaustion.Apply(p, Cooldown)) { Show("Unable to apply Axtral Exhaustion; spell cancelled."); return; }
         // Set cooldown before any effect or world operation. A thrown visual error cannot permit a free repeat.
+        Show("Axtral Projection cast!");
         casting = true;
         flight = StartCoroutine(Launch(p, origin, dir, axe!, targets, castRange, castAngle, castSpeed, castWidth, DurabilityPercent, SkillXp));
-        Show("Axtral Projection cast!");
     }
     private IEnumerator Launch(Player p, Vector3 origin, Vector3 dir, ItemDrop.ItemData axe, List<Target> targets, float castRange, float castAngle, float castSpeed, float castWidth, float costPercent, float xpPerTree)
     {
         try
         {
             axeVisual = SpellEffects.CreateAxe(); float traveled = 0; int index = 0; int tier = axe.m_shared.m_toolTier;
-            while (traveled <= castRange)
+            float end = Mathf.Max(castRange, targets.Count > 0 ? targets[targets.Count - 1].ForwardDistance(origin, dir) : 0);
+            while (traveled <= end)
             {
                 if (!p || p != Player.m_localPlayer || p.IsDead() || p.IsTeleporting()) yield break;
                 if (!DurabilityRules.CanHit(p.GetInventory().ContainsItem(axe), axe.m_shared.m_useDurability, axe.m_durability)) yield break;
                 SpellEffects.MoveAxe(axeVisual, origin + Vector3.up * 1.5f + dir * traveled, dir, traveled, castAngle);
                 while (index < targets.Count && (!targets[index].Object || targets[index].ForwardDistance(origin, dir) <= traveled))
                 {
+                    if (!p || p != Player.m_localPlayer || p.IsDead() || p.IsTeleporting()) yield break;
                     var target = targets[index++];
                     if (!target.Object) continue;
                     if (!DurabilityRules.CanHit(p.GetInventory().ContainsItem(axe), axe.m_shared.m_useDurability, axe.m_durability)) yield break;
@@ -178,9 +180,9 @@ public sealed class Plugin : BaseUnityPlugin
                     if (axe.m_shared.m_useDurability && axe.m_durability <= 0)
                     { Show("Your axe broke; Axtral Projection stopped."); yield break; }
                 }
-                if (traveled >= castRange) break;
+                if (traveled >= end) break;
                 yield return null;
-                traveled = Mathf.Min(castRange, traveled + Time.deltaTime * castSpeed);
+                traveled = Mathf.Min(end, traveled + Time.deltaTime * castSpeed);
             }
         }
         finally { if (axeVisual) Destroy(axeVisual); axeVisual = null; flight = null; casting = false; }

@@ -44,13 +44,18 @@ internal static class Targets
             }
             if (component == null || destructible == null || !seen.Add(component.GetInstanceID())) continue;
             if (!TargetSelection.Allowed(component.gameObject.name, tree, isStump, stumps, extras, excluded)) continue;
-            float radius = Mathf.Min(2, Mathf.Max(collider.bounds.extents.x, collider.bounds.extents.z));
+            var basePosition = component.transform.position;
+            var trunkCollider = component.GetComponentsInChildren<Collider>()
+                .Where(c => !c.isTrigger && c.bounds.min.y <= basePosition.y + 1.5f && c.bounds.max.y >= basePosition.y - 0.5f)
+                .OrderBy(c => (new Vector2(c.bounds.center.x - basePosition.x, c.bounds.center.z - basePosition.z)).sqrMagnitude)
+                .FirstOrDefault() ?? collider;
+            float radius = Mathf.Max(trunkCollider.bounds.extents.x, trunkCollider.bounds.extents.z);
             var nview = component.GetComponent<ZNetView>();
             if (!nview || !nview.IsValid()) continue;
             var delta = component.transform.position - origin;
             if (!Trapezoid.Contains(delta.x, delta.y, delta.z, forward.x, forward.z, radius, range, width, angle)) continue;
             if (!TargetRules.Eligible(true, PrivateArea.CheckAccess(component.transform.position, 0, false), minTier, tier)) continue;
-            result.Add(new Target(component, destructible, collider, minTier, isStump, radius));
+            result.Add(new Target(component, destructible, trunkCollider, minTier, isStump, radius));
         }
         return TargetSelection.Nearest(result, t => t.ForwardDistance(origin, forward), maxTrees);
     }
