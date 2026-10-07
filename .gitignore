@@ -8,3 +8,5 @@ CODEMAP.md
 .hermes/
 Environment.props
 references/
+__pycache__/
+*.pyc
