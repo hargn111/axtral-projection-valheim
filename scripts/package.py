@@ -23,7 +23,7 @@ def build():
     output = ROOT / "artifacts" / f"AxtralProjection-{version}.zip"
     output.parent.mkdir(exist_ok=True)
     source = ROOT / "src/AxtralProjection/bin/Release/net48"
-    files = {f"BepInEx/plugins/AxtralProjection/{name}": source / name
+    files = {f"BepInEx/plugins/Haragon-AxtralProjection/{name}": source / name
              for name in ("AxtralProjection.dll", "AxtralProjection.Core.dll")}
     files.update({name: ROOT / "package" / name for name in ("manifest.json", "icon.png", "README.md")})
     files.update({name: ROOT / name for name in ("LICENSE", "CHANGELOG.md")})

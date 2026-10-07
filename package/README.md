@@ -18,7 +18,7 @@ A successful nonempty cast applies **Axtral Exhaustion** for 180 seconds, visibl
 
 ## Install
 
-Install BepInExPack_Valheim and Jotunn **2.30.2** separately. Extract this ZIP into the game or mod-profile directory, preserving `BepInEx/plugins/AxtralProjection/`. Both project DLLs are required. Compile baseline is Valheim **1.0.2**; this candidate still needs in-game validation.
+Install BepInExPack_Valheim and Jotunn **2.30.2** separately. Extract this ZIP into the game or mod-profile directory, preserving `BepInEx/plugins/Haragon-AxtralProjection/`. Both project DLLs are required. When upgrading from a ZIP that used `BepInEx/plugins/AxtralProjection/`, remove the old mod DLLs from that folder so only the new copy is loaded; keep your config file. Compile baseline is Valheim **1.0.2**; this candidate still needs in-game validation.
 
 Launch once to generate `BepInEx/config/haragon.AxtralProjectionValheim.cfg`. The GUID rename creates a fresh config; previous config files are not migrated. Rune items/recipes and resource requirements are no longer registered.
 

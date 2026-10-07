@@ -38,7 +38,7 @@ If publication fails after tagging/pushing, stop and inspect `gh release view vX
 
 The supplied sample uses Thunderstore `manifest.json`, not a separate `metadata.json` format. The ZIP preserves that schema: ASCII letters/digits/underscores in name, X.Y.Z version_number, website_url, description of at most 250 characters, and dependency identifiers. Jotunn is listed explicitly alongside BepInExPack_Valheim.
 
-At ZIP root: `manifest.json`, 256×256 `icon.png`, `LICENSE`, `CHANGELOG.md`, and the **player-facing** `package/README.md` renamed to README.md. Only AxtralProjection.dll and AxtralProjection.Core.dll are placed under `BepInEx/plugins/AxtralProjection/`. No game, Jotunn, Harmony or BepInEx DLLs are shipped. A GitHub release does not automatically upload to Thunderstore; that is a separate, explicit action.
+At ZIP root: `manifest.json`, 256×256 `icon.png`, `LICENSE`, `CHANGELOG.md`, and the **player-facing** `package/README.md` renamed to README.md. Only AxtralProjection.dll and AxtralProjection.Core.dll are placed under `BepInEx/plugins/Haragon-AxtralProjection/`. No game, Jotunn, Harmony or BepInEx DLLs are shipped. A GitHub release does not automatically upload to Thunderstore; that is a separate, explicit action.
 
 ## Why no GitHub Actions workflow
 
