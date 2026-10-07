@@ -19,7 +19,7 @@ namespace AxtralProjection;
 [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Patch)]
 public sealed class Plugin : BaseUnityPlugin
 {
-    public const string Guid = "mod.axtralprojection.valheim";
+    public const string Guid = "haragon.AxtralProjectionValheim";
     public const string RunePrefab = "AxtralRune";
     private const string RuneName = "$item_axtral_rune";
     private const string CooldownKey = Guid + ".readyAt";

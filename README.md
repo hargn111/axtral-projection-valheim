@@ -19,7 +19,7 @@ A BepInEx mod inspired by RuneScape: Dragonwilds' **Axtral Projection** spell.
 2. Install **Jotunn 2.30.2**.
 3. Extract the candidate ZIP into the game/mod-profile directory, preserving `BepInEx/plugins/AxtralProjection/`.
 4. Confirm BOTH `AxtralProjection.dll` and `AxtralProjection.Core.dll` are installed.
-5. Launch once to generate `BepInEx/config/mod.axtralprojection.valheim.cfg`.
+5. Launch once to generate `BepInEx/config/haragon.AxtralProjectionValheim.cfg`.
 
 For multiplayer, all clients **and the server** need the same mod and Jotunn. Spell settings sync from the server; casting is trusted-client rather than server-authoritative. The flying axe, hold pose and targeting preview are local visuals. Native tree destruction replicates.
 

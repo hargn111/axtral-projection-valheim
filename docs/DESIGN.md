@@ -33,7 +33,7 @@ Newly created stumps and fallen logs are deliberately excluded from the snapshot
 
 ## Configuration and multiplayer
 
-BepInEx writes `mod.axtralprojection.valheim.cfg`. `CastKey` is local. Spell settings are Jotunn admin-only synchronized values: Range 1–100, ConeAngle 1–180, Cooldown 0–600, WoodcuttingLevel 0–100, RuneCost 0–100, TravelSpeed 1–100, ClearStumps and VinePrefabs.
+BepInEx writes `haragon.AxtralProjectionValheim.cfg`. `CastKey` is local. Spell settings are Jotunn admin-only synchronized values: Range 1–100, ConeAngle 1–180, Cooldown 0–600, WoodcuttingLevel 0–100, RuneCost 0–100, TravelSpeed 1–100, ClearStumps and VinePrefabs.
 
 All peers and dedicated servers must install the same mod version and Jotunn because a custom inventory item is added. Dedicated servers register the item/config without running player input. Gameplay hits use native network routing. Aim highlights, procedural pose and flying axe are **local to the caster**; other players receive native tree destruction, not the custom visual effects.
 
